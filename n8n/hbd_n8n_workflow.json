@@ -1,0 +1,60 @@
+{
+  "name": "Training-Load Agent - Daily 20:00",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [ { "field": "cronExpression", "expression": "0 20 * * *" } ] }
+      },
+      "id": "cron-2000",
+      "name": "Every day 20:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [ 240, 300 ]
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": { "__rl": true, "mode": "list", "value": "REPLACE_WITH_RESPONSES_FILE_ID" }
+      },
+      "id": "drive-download",
+      "name": "Download responses (Excel)",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [ 480, 300 ],
+      "credentials": { "googleDriveOAuth2Api": { "id": "REPLACE", "name": "Google Drive account" } }
+    },
+    {
+      "parameters": {
+        "command": "python3 /opt/hbd/hbd_agent.py --input {{$binary.data.fileName}} --out /tmp/report.html --log /opt/hbd/audit.csv"
+      },
+      "id": "run-core",
+      "name": "Run portable core",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [ 720, 300 ],
+      "notes": "Self-hosted n8n. The portable core (hbd_agent.py) computes metrics, decisions and the audit log. Cloud n8n users: port the core into a Code node or call it via an HTTP endpoint."
+    },
+    {
+      "parameters": {
+        "fromEmail": "agent@team.tn",
+        "toEmail": "REPLACE_WITH_COACH_EMAIL",
+        "subject": "=HBD daily report - {{ $now.format('yyyy-LL-dd') }}",
+        "emailFormat": "html",
+        "html": "={{ $json.reportHtml }}"
+      },
+      "id": "send-email",
+      "name": "Email the coach",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [ 960, 300 ],
+      "credentials": { "gmailOAuth2": { "id": "REPLACE", "name": "Gmail account" } }
+    }
+  ],
+  "connections": {
+    "Every day 20:00": { "main": [ [ { "node": "Download responses (Excel)", "type": "main", "index": 0 } ] ] },
+    "Download responses (Excel)": { "main": [ [ { "node": "Run portable core", "type": "main", "index": 0 } ] ] },
+    "Run portable core": { "main": [ [ { "node": "Email the coach", "type": "main", "index": 0 } ] ] }
+  },
+  "settings": { "timezone": "Africa/Tunis" },
+  "_comment": "Skeleton to import into n8n. Replace credential IDs, the Drive file ID, and the coach email. The business logic stays in the portable core; n8n only schedules, fetches, runs, and sends."
+}

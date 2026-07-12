@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HBD · Training-Load Monitor</title>
+<style>
+:root{--navy:#1f3864;--red:#b42318;--amber:#9a6700;--green:#1a7f37;--ink:#16181d;--mut:#5b6472;--line:#e4e7ec;--bg:#fafbfc}
+*{box-sizing:border-box}
+body{margin:0;background:#eef0f2;font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;color:var(--ink)}
+.mono{font-family:ui-monospace,Menlo,monospace}
+.appbar{display:flex;align-items:center;gap:14px;height:58px;padding:0 24px;border-bottom:1px solid var(--line);background:#fff;position:sticky;top:0;z-index:5}
+.logo{width:30px;height:30px;background:var(--navy);color:#fff;border-radius:6px;display:flex;align-items:center;justify-content:center;font:700 12px ui-monospace,Menlo,monospace}
+.title{font-size:14px;font-weight:600}
+.tabs{display:flex;gap:2px;margin-left:28px}
+.tab{padding:8px 12px;font-size:12.5px;color:var(--mut);border-bottom:2px solid transparent;cursor:pointer;user-select:none}
+.tab.on{color:var(--navy);font-weight:600;border-bottom-color:var(--navy)}
+.meta{margin-left:auto;font:11.5px ui-monospace,Menlo,monospace;color:var(--mut)}
+main{padding:22px 24px 40px;background:var(--bg);min-height:calc(100vh - 58px);display:flex;flex-direction:column;gap:16px}
+.cards{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
+.card{background:#fff;border:1px solid var(--line);border-radius:8px;padding:12px 16px}
+.card .k{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
+.card .v{font:600 24px/1.3 ui-monospace,Menlo,monospace}
+.alert{display:flex;align-items:center;gap:10px;background:#fef3f2;border:1px solid #f4c7c3;border-radius:8px;padding:10px 16px;font-size:12.5px;color:#7a271a}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--red);flex:none}
+.panel{background:#fff;border:1px solid var(--line);border-radius:8px;overflow:auto}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+thead tr{background:#f2f4f7;text-align:left;color:#475467}
+th{padding:9px 12px;font-weight:600;white-space:nowrap}
+td{padding:8px 12px;border-top:1px solid #eef0f3}
+.badge{color:#fff;padding:2px 9px;border-radius:10px;font-size:11px;font-weight:600;letter-spacing:.03em;white-space:nowrap}
+.foot{font-size:11px;color:#98a2b3}
+.name{font-weight:600;cursor:pointer;color:var(--navy)}
+.name:hover{text-decoration:underline}
+.grid2{display:grid;grid-template-columns:1fr 380px;gap:16px}
+.grid2c{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid3{display:grid;grid-template-columns:1fr 340px 340px;gap:16px}
+.box{background:#fff;border:1px solid var(--line);border-radius:8px;padding:16px 20px}
+.box h3{margin:0;font-size:12.5px;font-weight:600}
+.sub{font-size:11px;color:#98a2b3}
+.mgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:10px;margin-top:16px}
+.mgrid .k{font-size:10.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
+.mgrid .v{font:600 17px/1.5 ui-monospace,Menlo,monospace}
+.decision{border-radius:8px;overflow:hidden;border:1px solid var(--line);display:flex;flex-direction:column;background:#fff}
+.dhead{color:#fff;padding:10px 16px;display:flex;align-items:baseline;gap:10px}
+.dhead b{font-size:15px;letter-spacing:.04em}
+.dhead span{font-size:11px;opacity:.85}
+.dbody{padding:12px 16px;font-size:12px;color:#475467;line-height:1.55}
+.bars{display:flex;align-items:flex-end;gap:3px;height:120px;margin-top:14px;border-bottom:1px solid var(--line)}
+.bars div{flex:1;border-radius:2px 2px 0 0;min-height:2px}
+.hrow{display:grid;grid-template-columns:70px 1fr 24px;gap:10px;align-items:center;margin-top:10px}
+.hbar{height:8px;background:#f2f4f7;border-radius:4px;overflow:hidden}
+.hbar div{height:8px;border-radius:4px}
+.btn{background:var(--navy);color:#fff;border:none;border-radius:7px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer}
+.btn.ghost{background:#fff;color:#475467;border:1px solid #d7dbe1;font-weight:400}
+.row{display:flex;gap:8px;align-items:center}
+select{border:1px solid #d7dbe1;border-radius:7px;padding:7px 12px;font-size:12px;color:#475467;background:#fff}
+iframe{width:100%;height:75vh;border:none;background:#fff}
+.hide{display:none}
+@media(max-width:1100px){.cards{grid-template-columns:repeat(2,1fr)}.grid2,.grid2c,.grid3{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="appbar">
+  <div class="logo">HB</div>
+  <div class="title">HBD · Training-Load Monitor</div>
+  <div class="tabs">
+    <div class="tab on" data-v="squad">Squad</div>
+    <div class="tab" data-v="athlete">Athletes</div>
+    <div class="tab" data-v="report">Reports</div>
+    <div class="tab" data-v="audit">Audit log</div>
+    <div class="tab" onclick="location.href='/checkin'">Check-in ↗</div>
+  </div>
+  <div class="meta" id="meta">loading…</div>
+</div>
+<main>
+  <!-- SQUAD -->
+  <section id="v-squad">
+    <div class="cards" id="cards"></div>
+    <div class="alert hide" id="alert" style="margin-top:16px"><div class="dot"></div><div id="alertTxt"></div></div>
+    <div class="panel" style="margin-top:16px">
+      <table id="squadTbl">
+        <thead><tr><th>Athlete</th><th>Tomorrow</th><th>ACWR</th><th>Wellness (z)</th><th>Monotony</th><th>Strain</th><th>Weekly (AU)</th><th>Health</th><th>Confidence</th><th>Why</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="foot" style="margin-top:12px">Recommendations are decision support, not verdicts. ACWR and related indices flag patterns for the coach to judge. Generated automatically by HBD.</p>
+  </section>
+
+  <!-- ATHLETE -->
+  <section id="v-athlete" class="hide">
+    <div class="row" style="margin-bottom:16px">
+      <select id="athSel"></select>
+      <span class="sub" id="athDate"></span>
+    </div>
+    <div class="grid2">
+      <div class="box">
+        <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+          <div style="font-size:20px;font-weight:700" id="aName"></div>
+          <div style="margin-left:auto;font-size:11px;color:#475467;background:#f2f4f7;border:1px solid var(--line);border-radius:10px;padding:3px 10px" id="aConf"></div>
+        </div>
+        <div class="mgrid" id="aMetrics"></div>
+      </div>
+      <div class="decision" id="aDecision"></div>
+    </div>
+    <div class="grid2c" style="margin-top:16px">
+      <div class="box">
+        <div style="display:flex;justify-content:space-between;align-items:baseline"><h3>Daily load — last 28 days</h3><span class="sub">session-RPE, AU</span></div>
+        <div class="bars" id="aBars"></div>
+        <div style="display:flex;justify-content:space-between" class="sub mono" id="aBarLbl"></div>
+      </div>
+      <div class="box">
+        <div style="display:flex;justify-content:space-between;align-items:baseline"><h3>ACWR — last 14 days</h3><span class="sub">band 0.80–1.30 · red ≥ 1.50</span></div>
+        <svg id="aAcwr" width="100%" height="130" viewBox="0 0 612 130" preserveAspectRatio="none" style="margin-top:10px"></svg>
+      </div>
+    </div>
+    <div class="grid3" style="margin-top:16px">
+      <div class="box">
+        <div style="display:flex;justify-content:space-between;align-items:baseline"><h3>Wellness composite — last 14 days</h3><span class="sub">higher = better · dashed = 28-day baseline</span></div>
+        <svg id="aWell" width="100%" height="130" viewBox="0 0 612 130" preserveAspectRatio="none" style="margin-top:10px"></svg>
+      </div>
+      <div class="box">
+        <h3>Hooper items — today</h3><div class="sub">1 = best · 7 = worst</div>
+        <div id="aHooper" style="margin-top:6px"></div>
+      </div>
+      <div class="box">
+        <h3>Health module</h3>
+        <div id="aHealth" style="margin-top:14px;font-size:12.5px;color:#475467;display:flex;flex-direction:column;gap:9px"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- REPORT -->
+  <section id="v-report" class="hide">
+    <div class="row" style="margin-bottom:12px">
+      <button class="btn" onclick="runNow()">Generate report now</button>
+      <a class="btn ghost" href="/report" target="_blank" style="text-decoration:none">Open in new tab</a>
+      <span class="sub" id="runMsg"></span>
+    </div>
+    <iframe id="reportFrame" src="/report"></iframe>
+  </section>
+
+  <!-- AUDIT -->
+  <section id="v-audit" class="hide">
+    <div class="row" style="margin-bottom:12px">
+      <a class="btn" href="/api/audit.csv" style="text-decoration:none">Export CSV</a>
+      <span class="sub" id="auditCount"></span>
+    </div>
+    <div class="panel">
+      <table>
+        <thead><tr><th>Generated at</th><th>Data through</th><th>Recommend for</th><th>Athlete</th><th>Decision</th><th>ACWR</th><th>Wellness z</th><th>Monotony</th><th>Weekly (AU)</th><th>Reasons</th></tr></thead>
+        <tbody id="auditBody"></tbody>
+      </table>
+    </div>
+    <p class="foot" style="margin-top:12px">Appended by the HBD core on every run, one row per athlete per run — timestamped and reproducible.</p>
+  </section>
+</main>
+<script>
+const $=s=>document.querySelector(s);
+const BADGE={INCREASE:"#1a7f37",MAINTAIN:"#9a6700",DECREASE:"#b42318"};
+const esc=s=>String(s??"—").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+document.querySelectorAll(".tab[data-v]").forEach(t=>t.onclick=()=>{
+  document.querySelectorAll(".tab[data-v]").forEach(x=>x.classList.toggle("on",x===t));
+  ["squad","athlete","report","audit"].forEach(v=>$("#v-"+v).classList.toggle("hide",v!==t.dataset.v));
+  if(t.dataset.v==="audit")loadAudit();
+});
+
+async function loadSquad(){
+  const d=await(await fetch("/api/squad")).json();
+  $("#meta").textContent=`Data through ${d.date} · recommendations for ${d.recommendFor}`;
+  $("#cards").innerHTML=[
+    ["Athletes analysed",d.n,"var(--ink)"],["Decrease",d.counts.DECREASE,"var(--red)"],
+    ["Maintain",d.counts.MAINTAIN,"var(--amber)"],["Increase",d.counts.INCREASE,"var(--green)"],
+    ["Health flags",d.healthFlags,"var(--ink)"]
+  ].map(([k,v,c])=>`<div class="card"><div class="k" style="color:${c}">${k}</div><div class="v" style="color:${c}">${v}</div></div>`).join("");
+  if(d.alerts.length){$("#alert").classList.remove("hide");
+    $("#alertTxt").innerHTML="<b>Attention:</b> "+d.alerts.map(esc).join(" · ")}
+  $("#squadTbl tbody").innerHTML=d.squad.map(p=>`<tr>
+    <td class="name" onclick="openAthlete('${encodeURIComponent(p.name)}')">${esc(p.name)}</td>
+    <td><span class="badge" style="background:${p.badge}">${p.decision}</span></td>
+    <td class="mono">${p.acwr??"—"}</td><td class="mono">${p.wellness??"—"} (${p.wz??"—"})</td>
+    <td class="mono">${p.monotony??"—"}</td><td class="mono">${p.strain??"—"}</td><td class="mono">${p.weekly??"—"}</td>
+    <td style="color:${p.health!=="—"?"var(--red)":"#98a2b3"}">${esc(p.health)}</td>
+    <td style="color:var(--mut)">${esc(p.conf)}</td>
+    <td style="color:#475467;font-size:11.5px;max-width:280px">${esc(p.why)}</td></tr>`).join("");
+  const sel=$("#athSel");
+  sel.innerHTML=d.squad.map(p=>`<option>${esc(p.name)}</option>`).join("");
+  sel.onchange=()=>loadAthlete(sel.value);
+}
+
+function openAthlete(n){
+  document.querySelector('.tab[data-v="athlete"]').click();
+  $("#athSel").value=decodeURIComponent(n);loadAthlete(decodeURIComponent(n));
+}
+
+function line(svg,pts,ymin,ymax,color,extras=""){
+  const W=612,H=130,pad=20;
+  const xs=i=>pad+(W-2*pad)*i/(pts.length-1);
+  const ys=v=>H-10-(H-30)*(v-ymin)/(ymax-ymin);
+  const valid=pts.map((v,i)=>v==null?null:`${xs(i)},${ys(v).toFixed(1)}`).filter(Boolean);
+  svg.innerHTML=extras+`<line x1="${pad}" y1="${H-10}" x2="${W-pad}" y2="${H-10}" stroke="#e4e7ec"/>`+
+    `<polyline points="${valid.join(" ")}" fill="none" stroke="${color}" stroke-width="2"/>`+
+    (valid.length?`<circle cx="${valid.at(-1).split(",")[0]}" cy="${valid.at(-1).split(",")[1]}" r="4" fill="${color}"/>`:"");
+  return {xs,ys};
+}
+
+async function loadAthlete(name){
+  const d=await(await fetch("/api/athlete/"+encodeURIComponent(name))).json();
+  $("#aName").textContent=d.name;
+  $("#athDate").textContent="Data through "+d.date;
+  const m=d.metrics||{};
+  $("#aConf").innerHTML=`Confidence: <b>${esc(m.confidence)}</b> · ${m.days_logged??"?"} / 28 days logged`;
+  const red=(v,bad)=>v!=null&&bad?"var(--red)":"var(--ink)";
+  $("#aMetrics").innerHTML=[
+    ["Daily load",m.daily_load,false],["Weekly load",m.weekly_load,false],
+    ["ACWR",m.acwr,m.acwr>=1.5],["Monotony",m.monotony,m.monotony>=2],
+    ["Strain",m.strain,false],["Wellness",m.wellness,m.wellness_z<=-1],["Wellness z",m.wellness_z,m.wellness_z<=-1]
+  ].map(([k,v,bad])=>`<div><div class="k">${k}</div><div class="v" style="color:${red(v,bad)}">${v??"—"}</div></div>`).join("");
+  const dec=d.decision??"—";
+  $("#aDecision").innerHTML=`
+    <div class="dhead" style="background:${d.badge||"#5b6472"}"><b>${dec}</b><span>tomorrow</span></div>
+    <div class="dbody">${(d.reasons||[]).map(r=>`<div>· ${esc(r)}</div>`).join("")}
+      ${d.strategy?`<div style="margin-top:8px;padding-top:8px;border-top:1px solid #eef0f3;color:var(--ink)"><b>Strategy:</b> ${esc(d.strategy)}</div>`:""}
+      ${d.ext?`<div style="margin-top:8px" class="sub mono">readiness ${d.ext.readiness}/100 · EWMA-ACWR ${d.ext.ewma_acwr??"—"} · ramp ${d.ext.weekly_ramp_pct??"—"}% · TSB ${d.ext.tsb??"—"}</div>`:""}
+    </div>`;
+  const mx=Math.max(600,...d.loads28.map(x=>x.load));
+  $("#aBars").innerHTML=d.loads28.map((x,i)=>{
+    const c=x.load===0?"#eef0f3":(i===d.loads28.length-1?"var(--red)":"var(--navy)");
+    return `<div style="height:${Math.max(2,Math.round(x.load/mx*100))}%;background:${c}" title="${x.date}: ${x.load} AU"></div>`}).join("");
+  $("#aBarLbl").innerHTML=`<span>${d.loads28[0].date.slice(5)}</span><span>${d.loads28[14].date.slice(5)}</span><span>${d.loads28.at(-1).date.slice(5)}</span>`;
+  // ACWR chart with 0.8-1.3 band and 1.5 red line
+  {const svg=$("#aAcwr"),W=612,H=130,ymin=0,ymax=2;
+   const y=v=>H-10-(H-30)*(v-ymin)/(ymax-ymin);
+   line(svg,d.acwr14.map(x=>x.acwr==null?null:Math.min(x.acwr,2)),ymin,ymax,"#1f3864",
+     `<rect x="20" y="${y(1.3)}" width="${W-40}" height="${y(0.8)-y(1.3)}" fill="#f0f6f1"/>`+
+     `<line x1="20" y1="${y(1.5)}" x2="${W-20}" y2="${y(1.5)}" stroke="#b42318" stroke-dasharray="4 3"/>`);
+   const last=d.acwr14.at(-1).acwr;
+   if(last!=null)svg.innerHTML+=`<text x="${W-24}" y="${y(Math.min(last,2))-8}" font-size="10" font-family="ui-monospace,Menlo,monospace" fill="#b42318" text-anchor="end">${last}</text>`;}
+  // wellness
+  {const svg=$("#aWell"),W=612,H=130,ymin=1,ymax=7;
+   const y=v=>H-10-(H-30)*(v-ymin)/(ymax-ymin);
+   line(svg,d.wellness14.map(x=>x.wellness),ymin,ymax,"#9a6700",
+     d.wellnessBaseline?`<line x1="20" y1="${y(d.wellnessBaseline)}" x2="${W-20}" y2="${y(d.wellnessBaseline)}" stroke="#98a2b3" stroke-dasharray="4 3"/>`:"");}
+  // hooper
+  const h=d.hooperToday||{};
+  $("#aHooper").innerHTML=["fatigue","soreness","sleep","stress"].map(k=>{
+    const v=h[k];const pct=v==null?0:Math.round(v/7*100);
+    const c=v>=6?"var(--red)":v>=5?"var(--amber)":"var(--mut)";
+    return `<div class="hrow"><span style="font-size:12px;color:#475467;text-transform:capitalize">${k}</span>
+      <div class="hbar"><div style="width:${pct}%;background:${c}"></div></div>
+      <span class="mono" style="font-size:11px">${v??"—"}</span></div>`}).join("");
+  // health
+  const hs=d.health||{};
+  const cls=hs.cannot?"Could not participate":hs.substantial?"Substantial problem":hs.flagged?"Flagged":"No problem reported";
+  $("#aHealth").innerHTML=`
+    <div style="display:flex;justify-content:space-between"><span>Pain reported today</span><b style="color:${hs.pain?"var(--red)":"#98a2b3"}">${hs.pain?("Yes"+(hs.location?" — "+esc(hs.location):"")):"No"}</b></div>
+    <div style="display:flex;justify-content:space-between"><span>Latest OSTRC-H severity</span><b class="mono" style="color:${(hs.severity||0)>0?"var(--amber)":"#98a2b3"}">${hs.severity!=null?hs.severity+" / 100":"—"}</b></div>
+    <div style="display:flex;justify-content:space-between"><span>Classification</span><b>${cls}</b></div>
+    ${hs.action?`<div style="margin-top:6px;background:#fef3f2;border:1px solid #f4c7c3;border-radius:6px;padding:9px 12px;font-size:12px;color:#7a271a"><b>Action — ${esc(hs.action)}:</b> ${hs.action==="STOP"?"no training today; urgent medical assessment.":hs.action==="REFER"?"cut load and refer to medical staff; do not progress until resolved.":"hold, do not increase, monitor."}</div>`:""}`;
+}
+
+async function runNow(){
+  $("#runMsg").textContent="running…";
+  const r=await(await fetch("/api/run",{method:"POST"})).json();
+  $("#runMsg").textContent=`done — ${r.athletes} athletes analysed`;
+  $("#reportFrame").src="/report?"+Date.now();
+}
+
+async function loadAudit(){
+  const d=await(await fetch("/api/audit")).json();
+  $("#auditCount").textContent=d.entries.length?d.entries.length+" entries (latest first) · audit.csv":"No entries yet — generate a report first (Reports tab)";
+  $("#auditBody").innerHTML=d.entries.map(a=>`<tr>
+    <td class="mono" style="color:var(--mut)">${esc(a.generated_at)}</td>
+    <td class="mono" style="color:var(--mut)">${esc(a.data_through)}</td>
+    <td class="mono" style="color:var(--mut)">${esc(a.recommend_for)}</td>
+    <td style="font-weight:600">${esc(a.athlete)}</td>
+    <td><span class="badge" style="background:${BADGE[a.decision]||"#5b6472"}">${esc(a.decision)}</span></td>
+    <td class="mono">${esc(a.acwr)}</td><td class="mono">${esc(a.wellness_z)}</td>
+    <td class="mono">${esc(a.monotony)}</td><td class="mono">${esc(a.weekly_load)}</td>
+    <td style="color:#475467;font-size:11px">${esc(a.reasons)}</td></tr>`).join("");
+}
+
+loadSquad().then(()=>{const s=$("#athSel");if(s.options.length)loadAthlete(s.value)});
+</script>
+</body>
+</html>

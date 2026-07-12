@@ -1,0 +1,20 @@
+services:
+  hbd:
+    build: .
+    container_name: hbd-app
+    ports:
+      - "8000:8000"
+    volumes:
+      # Responses CSV: check-ins submitted through the app persist here
+      - hbd_data:/data
+      # Generated reports + audit log
+      - hbd_output:/output
+    environment:
+      HBD_DATA: /data/cohort_football_100.csv
+      HBD_OUTPUT: /output
+      HBD_TZ: Africa/Tunis
+    restart: unless-stopped
+
+volumes:
+  hbd_data:
+  hbd_output:

@@ -1,0 +1,7 @@
+.git
+__pycache__
+*.pyc
+output/
+docs/
+README.md
+n8n/
