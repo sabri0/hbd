@@ -40,7 +40,7 @@ Every metric is computed **deterministically**. Generative AI, where used, only 
 |---|---|---|
 | **S1** | `HBD_App.html` | Free, standalone single-file web application. Runs in any browser and computes entirely on the client — no server, no install, no data upload. The same deterministic logic as the core; suitable for a single coach with no infrastructure. *(The `app/` + `core/` in this repo is the full server-backed equivalent with a multi-athlete dashboard, scheduler and audit log.)* |
 | **S2** | `core/hbd_agent.py`, `HBD_Supplementary_Code.html` | The deterministic decision core and a rendered, syntax-highlighted listing of its source. `hbd_agent.py` is the portable, zero-web-dependency implementation of every index, threshold and decision; the HTML listing is the same code for review and reproducibility. |
-| **S3** | *analysis prompt* | The generative-AI analysis prompt used to produce a narrative interpretation of the computed data. Constrains the model to describing and contextualising the deterministic outputs — it cannot recompute, override or invent metrics. |
+| **S3** | `S3_analysis_prompt.md`, `core/analysis_prompt.py` | The generative-AI analysis prompt used to produce a narrative interpretation of the computed data, plus the module that builds the deterministic data block and (optionally) calls a model to render the coach brief. Constrains the model to describing and contextualising the deterministic outputs — it cannot recompute, override or invent metrics. |
 | **S4** | `S4_HBOD_Monitoring_Form.docx` | The daily monitoring form template: every field and its response scale (see [§9](#9-data-model-and-input-format)). |
 | **S5** | *synthetic dataset + example output* | A small synthetic dataset with its corresponding worked example output, used to validate the pipeline: given inputs → expected indices, decision and rationale. Lets a reader confirm the core reproduces the published numbers. |
 | **S6** | `data/cohort_football_100.csv`, `data/S6_HBD_Synthetic_Cohort_100players.xlsx` | A synthetic 100-player football cohort, as a comma-separated file and as an Excel workbook. The workbook holds three sheets — raw data, computed per-player metrics, and variable definitions — plus the supplementary figures: the squad wellness heatmap, the exponentially-weighted vs. rolling workload (ACWR) ratio, and the readiness-score distribution. |
@@ -196,6 +196,8 @@ To use your own data, replace the CSV (or point `HBD_DATA` at it) — no code ch
 ```
 HBDApp/
 ├── core/hbd_agent.py        # Deterministic decision core (portable, zero web deps, also a CLI) — S2
+├── core/analysis_prompt.py  # S3: constrained analysis prompt + deterministic data-block builder
+├── S3_analysis_prompt.md    # S3: human-readable analysis-prompt reference
 ├── app/
 │   ├── main.py              # FastAPI layer: JSON API + check-in ingest + 20:00 scheduler
 │   └── static/
@@ -238,6 +240,22 @@ python core/hbd_agent.py --input data/cohort_football_100.csv \
 `auto` issues the daily report plus any due weekly (Saturday), monthly (last Saturday) or quarterly (last Saturday of Mar/Jun/Sep/Dec) review.
 
 **Audit log columns:** `generated_at, data_through, recommend_for, athlete, decision, acwr, wellness, wellness_z, monotony, strain, weekly_load, daily_load, reasons` — every recommendation is timestamped and reproducible.
+
+### The analysis prompt (S3, `core/analysis_prompt.py`)
+
+The only place a language model touches the pipeline — and it never changes a number. `core/analysis_prompt.py` turns the engine's per-athlete results into a constrained prompt so a model can write a plain-language brief for the coach:
+
+- `ANALYSIS_PROMPT` — the guardrailed system prompt (also in [`S3_analysis_prompt.md`](S3_analysis_prompt.md)): the model may only describe and contextualise; it may not recompute, override, invent or "correct" a value, the health tier outranks load and wellness, and recommendations are decision support, not verdicts.
+- `build_data_block()` — assembles the deterministic user turn (decision, driving metrics, health status, rationale, strategy per athlete), ordered DECREASE → MAINTAIN → INCREASE with health-flagged athletes first, and null-safe (a missing value is reported, never guessed).
+- `render_with_claude()` — optional one-call helper that sends the prompt to a model and returns the narrative. It imports the Anthropic SDK lazily, so the core keeps zero third-party dependencies.
+
+```bash
+# Print the ready-to-send prompt — deterministic, no model call, no network:
+python core/analysis_prompt.py --input data/cohort_football_100.csv --emit
+# Build the prompt and render the narrative (needs `anthropic` + ANTHROPIC_API_KEY):
+python core/analysis_prompt.py --input data/cohort_football_100.csv --run
+# options: --athlete "Player 003"   --date YYYY-MM-DD
+```
 
 ---
 
