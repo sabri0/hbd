@@ -1,0 +1,6 @@
+generated_at,data_through,recommend_for,athlete,decision,acwr,wellness,wellness_z,monotony,strain,weekly_load,daily_load,reasons
+2026-07-21T17:17:04,2026-03-31,2026-04-01,Athlete 1,INCREASE,0.57,6.0,1.01,1.53,1963.9,1285.0,125.0,"ACWR 0.57 below 0.8, room to load | wellness at or above personal baseline"
+2026-07-21T17:17:04,2026-03-31,2026-04-01,Athlete 2,MAINTAIN,1.0,5.75,0.39,1.54,3957.6,2575.0,250.0,wellness at or above personal baseline
+2026-07-21T17:17:04,2026-03-31,2026-04-01,Athlete 3,DECREASE,1.25,4.75,-3.57,1.39,4840.8,3495.0,1170.0,wellness -3.57 SD below personal baseline | acute load spike (2.73x recent mean)
+2026-07-21T17:17:04,2026-03-31,2026-04-01,Athlete 4,DECREASE,1.0,2.0,-4.44,1.54,3957.6,2575.0,250.0,"wellness -4.44 SD below personal baseline | poor sleep last night (6.0/7) | high fatigue (6.0/7) | high stress (6.0/7) | soreness elevated, monitor (6.0/7)"
+2026-07-21T17:17:04,2026-03-31,2026-04-01,Athlete 5,DECREASE,1.0,5.75,0.39,1.54,3957.6,2575.0,250.0,"substantial health problem (Knee), OSTRC severity 47: reduce load and refer to medical staff | wellness at or above personal baseline"

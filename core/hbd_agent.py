@@ -15,7 +15,7 @@ Pipeline:
 Design rule: all numbers are computed deterministically here. A language model,
 if used downstream, only rephrases this output. It never changes a metric.
 
-Author: prepared for Dr. Ismail Dergaa. License: MIT.
+Author:  Dr. Ismail Dergaa et al. License: MIT.
 """
 
 import argparse

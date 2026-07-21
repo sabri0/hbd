@@ -42,7 +42,7 @@ Every metric is computed **deterministically**. Generative AI, where used, only 
 | **S2** | `core/hbd_agent.py`, `HBD_Supplementary_Code.html` | The deterministic decision core and a rendered, syntax-highlighted listing of its source. `hbd_agent.py` is the portable, zero-web-dependency implementation of every index, threshold and decision; the HTML listing is the same code for review and reproducibility. |
 | **S3** | `S3_analysis_prompt.md`, `core/analysis_prompt.py` | The generative-AI analysis prompt used to produce a narrative interpretation of the computed data, plus the module that builds the deterministic data block and (optionally) calls a model to render the coach brief. Constrains the model to describing and contextualising the deterministic outputs — it cannot recompute, override or invent metrics. |
 | **S4** | `S4_HBOD_Monitoring_Form.docx` | The daily monitoring form template: every field and its response scale (see [§9](#9-data-model-and-input-format)). |
-| **S5** | *synthetic dataset + example output* | A small synthetic dataset with its corresponding worked example output, used to validate the pipeline: given inputs → expected indices, decision and rationale. Lets a reader confirm the core reproduces the published numbers. |
+| **S5** | `validation/` | A small synthetic dataset (`S5_validation_dataset.csv`, 5 athletes × 28 days) with its corresponding worked example output (`S5_example_output.txt`, `S5_example_report.html`, `S5_example_audit.csv`), used to validate the pipeline: given inputs → expected indices, decision and rationale. Each athlete targets one decision branch (INCREASE / MAINTAIN / spike-DECREASE / wellness-DECREASE / REDUCE & REFER). See [`validation/README.md`](validation/README.md) for the reproduce command. |
 | **S6** | `data/cohort_football_100.csv`, `data/S6_HBD_Synthetic_Cohort_100players.xlsx` | A synthetic 100-player football cohort, as a comma-separated file and as an Excel workbook. The workbook holds three sheets — raw data, computed per-player metrics, and variable definitions — plus the supplementary figures: the squad wellness heatmap, the exponentially-weighted vs. rolling workload (ACWR) ratio, and the readiness-score distribution. |
 
 Companion documents also provided: `HBOD_Manuscript_BiologyOfSport - ID.docx` (the manuscript). Items marked *italic* are external artifacts referenced by the article; the code, data and deployment assets they describe are all in this repository.
@@ -206,6 +206,10 @@ HBDApp/
 ├── data/
 │   ├── cohort_football_100.csv                 # Synthetic 100-player football cohort — S6
 │   └── S6_HBD_Synthetic_Cohort_100players.xlsx # Same cohort as workbook (raw · metrics · definitions)
+├── validation/              # S5: synthetic validation dataset + worked example output
+│   ├── S5_validation_dataset.csv               # 5 athletes × 28 days
+│   ├── S5_example_output.txt / .html           # Expected report from the core
+│   └── S5_example_audit.csv                    # Expected per-athlete audit rows
 ├── n8n/hbd_n8n_workflow.json # Alternative orchestration: n8n skeleton (Drive → core → Gmail)
 ├── output/                  # Generated reports + audit log (Docker volume; git-ignored)
 ├── Dockerfile               # python:3.12-slim image
