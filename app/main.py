@@ -151,7 +151,7 @@ def api_athlete(name: str, date: Optional[str] = None):
 class CheckIn(BaseModel):
     athlete: str
     email: Optional[str] = None
-    moment: str = "Matin"
+    moment: str = "Morning"
     duration_min: float = Field(gt=0, le=600)
     rpe: float = Field(ge=0, le=10)
     fatigue: Optional[int] = Field(None, ge=1, le=7)
@@ -182,18 +182,18 @@ def api_checkin(c: CheckIn):
                 row[h] = "" if val is None else str(val)
                 return
 
-    put(["horodat"], ts)
-    put(["utilisateur"], c.email or "")
-    put(["qui es"], c.athlete)
-    put(["moment"], c.moment)
-    put(["duree"], c.duration_min)
-    put(["intensite", "rpe"], c.rpe)
+    put(["horodat", "timestamp"], ts)
+    put(["utilisateur", "athlete id", "email"], c.email or "")
+    put(["qui es", "player"], c.athlete)
+    put(["moment", "timing"], c.moment)
+    put(["duree", "duration"], c.duration_min)
+    put(["intensite", "intensity", "cr-10", "rpe"], c.rpe)
     put(["fatigu"], c.fatigue)
     put(["stress"], c.stress)
-    put(["courbatur"], c.soreness)
-    put(["sommeil"], c.sleep)
-    put(["douleur"], "Oui" if c.pain else "Non")
-    put(["localis"], c.pain_location if c.pain else "")
+    put(["courbatur", "soreness"], c.soreness)
+    put(["sommeil", "sleep"], c.sleep)
+    put(["douleur", "pain"], "Yes" if c.pain else "No")
+    put(["localis", "location"], c.pain_location if c.pain else "")
     put(["ostrc_q1"], c.ostrc_q1)
     put(["ostrc_q2"], c.ostrc_q2)
     put(["ostrc_q3"], c.ostrc_q3)

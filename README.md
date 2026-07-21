@@ -55,6 +55,7 @@ HBDApp/
 │       ├── index.html       # Coach dashboard (Squad / Athletes / Reports / Audit log)
 │       └── checkin.html     # Athlete mobile daily check-in form
 ├── data/cohort_football_100.csv   # Synthetic 100-player football cohort (seed data)
+├── data/S6_HBD_Synthetic_Cohort_100players.xlsx  # Same cohort as workbook (raw · metrics · definitions)
 ├── n8n/hbd_n8n_workflow.json      # Alternative orchestration: n8n skeleton (Drive → core → Gmail)
 ├── output/                  # Generated reports + audit log (volume in Docker)
 ├── Dockerfile
@@ -99,7 +100,7 @@ Example check-in:
 ```bash
 curl -X POST http://localhost:8000/api/checkin \
   -H "Content-Type: application/json" \
-  -d '{"athlete":"Player 001","moment":"Matin","duration_min":90,"rpe":7,
+  -d '{"athlete":"Player 001","moment":"Morning","duration_min":90,"rpe":7,
        "fatigue":4,"stress":3,"soreness":4,"sleep":2,"pain":false}'
 ```
 
@@ -117,13 +118,15 @@ python core/hbd_agent.py --input data/cohort_football_100.csv \
 
 ## Data format
 
-Input is a Google-Form-style responses CSV/XLSX. Column matching is by substring and multilingual (French/English headers; yes/no accepts French, English and Arabic), e.g.:
+Input is a Google-Form-style responses CSV/XLSX. Column matching is by substring and multilingual (English **or** French headers; yes/no accepts French, English and Arabic). The shipped `data/cohort_football_100.csv` uses English headers:
 
 ```
-Horodateur, Nom d'utilisateur, Qui es tu?, Moment de la seance,
-Duree de ta seance (min), Intensite RPE, fatigue, stress, courbatures,
-sommeil, Douleur specifique, Localisation, ostrc_q1..ostrc_q4
+Timestamp, Athlete ID, Player, Session timing, Session duration (min),
+Intensity (CR-10), Fatigue, Stress, Soreness, Sleep, Specific pain,
+Location, OSTRC_Q1..OSTRC_Q4
 ```
+
+French Google-Form exports work unchanged (`Horodateur, Nom d'utilisateur, Qui es tu?, Moment de la seance, Duree …, Intensite RPE, fatigue, stress, courbatures, sommeil, Douleur specifique, Localisation, ostrc_q1..4`).
 
 To use your own data, replace the CSV (or point `HBD_DATA` at it) — no code change needed as long as headers contain the recognisable keywords.
 
@@ -138,5 +141,18 @@ To use your own data, replace the CSV (or point `HBD_DATA` at it) — no code ch
 ## n8n alternative
 
 `n8n/hbd_n8n_workflow.json` is an importable skeleton for a self-hosted n8n: schedule trigger (20:00) → download responses from Google Drive → run `hbd_agent.py` → email the coach via Gmail. Replace the credential IDs, Drive file ID and coach email. Business logic stays in the portable core.
+
+## Supplementary Materials
+
+Files accompanying the article. Every metric is computed deterministically; generative AI, where used, only rephrases output and never alters a value.
+
+| Item | File(s) | Description |
+|---|---|---|
+| **S1** | `HBD_App.html` | Free, standalone web application. Runs in any browser and computes entirely on the client — no server, no install, no data upload. Athlete self-reports are entered locally and the deterministic core produces per-athlete indices and the next-day load recommendation (INCREASE / MAINTAIN / DECREASE) with full rationale. |
+| **S2** | `hbd_agent.py`, `HBD_Supplementary_Code.html` | The deterministic decision core and a rendered, human-readable listing of its source. `hbd_agent.py` is the portable, zero-web-dependency implementation of every index and threshold; `HBD_Supplementary_Code.html` is the same code as a syntax-highlighted listing for review and reproducibility. |
+| **S3** | *(analysis prompt)* | The generative-AI analysis prompt used to produce a narrative interpretation of the computed data. Constrains the model to describing and contextualising the deterministic outputs — it cannot recompute, override, or invent metrics. |
+| **S4** | *(monitoring form template)* | The daily monitoring form template: all fields and their response scales — session duration (min), RPE (Borg CR-10, 0–10), the four Hooper wellness items (fatigue, stress, soreness, sleep; 1 = best … 7 = worst), the daily pain gate, and the weekly OSTRC-H health items (0–100 severity). |
+| **S5** | *(synthetic dataset + example output)* | A small synthetic dataset with the corresponding worked example output, used to validate the pipeline: given inputs → expected indices, decision, and rationale. Lets a reader confirm the core reproduces the published numbers. |
+| **S6** | `data/cohort_football_100.csv`, *(Excel workbook)* | A synthetic 100-player football cohort, provided as a comma-separated file and as an Excel workbook. The workbook holds three sheets — raw data, computed per-player metrics, and variable definitions — plus the supplementary figures: the squad wellness heatmap, the exponentially weighted vs. rolling workload (ACWR) ratio, and the readiness-score distribution. |
 
 

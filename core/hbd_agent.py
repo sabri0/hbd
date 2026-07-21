@@ -46,15 +46,15 @@ WELLNESS_GOOD_Z = 0.0    # at or above baseline = green
 ACUTE_SPIKE_RATIO = 1.5  # today's load vs 7-day mean
 
 # ----------------------------------------------------------------------------
-# Column mapping. Matches the French Google Form headers (substring, lower-case).
+# Column mapping. Matches French and English form headers (substring, lower-case).
 # ----------------------------------------------------------------------------
 COLMAP = {
     "timestamp": ["horodat", "timestamp"],
-    "email": ["email", "adresse", "utilisateur", "mail"],
-    "athlete": ["qui es", "athlete", "nageur", "swimmer", "name", "nom"],
-    "moment": ["moment"],
+    "email": ["email", "adresse", "utilisateur", "mail", "athlete id"],
+    "athlete": ["qui es", "player", "nageur", "swimmer", "athlete", "name", "nom"],
+    "moment": ["moment", "timing"],
     "duration": ["duree", "durée", "duration", "min"],
-    "intensity": ["intensite", "intensité", "ressenti", "rpe"],
+    "intensity": ["intensite", "intensité", "intensity", "cr-10", "ressenti", "rpe"],
     "fatigue": ["fatigu"],
     "stress": ["stress"],
     "soreness": ["courbatur", "muscle", "soreness"],

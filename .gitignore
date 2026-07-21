@@ -1,0 +1,12 @@
+# Local tooling / editor
+.claude/
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Generated reports & audit log
+output/
+
+# Working / supplementary source docs (not app data)
+new files/
