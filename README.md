@@ -1,4 +1,4 @@
-# HBD — Training-Load & Wellness Monitor
+# HBOD — Training-Load & Wellness Monitor
 
 **Supplementary Materials** for the manuscript *Hooper–Borg–Dergaa (HBD): a deterministic, auditable framework for daily training-load and wellness monitoring in team sport.*
 
