@@ -1,6 +1,8 @@
 # HBOD — Training-Load & Wellness Monitor
 
-**Supplementary Materials** for the manuscript *Hooper–Borg–Dergaa (HBD): a deterministic, auditable framework for daily training-load and wellness monitoring in team sport.*
+**Supplementary Materials** for the manuscript *HBOD (Hooper-Borg-Oslo-Dergaa): an autonomous artificial intelligence agent and free application for monitoring athletes’ daily
+
+training-load, wellness, and health*
 
 This repository is the reference implementation described in the article. It bundles the free web application, the deterministic decision core and its code listing, the synthetic validation data, and the orchestration/deployment assets — everything needed to reproduce every number, figure and recommendation reported in the paper.
 
