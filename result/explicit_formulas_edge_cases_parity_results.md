@@ -19,7 +19,9 @@ All metrics are deterministic and computed by the decision core.
 - Acute mean (AU/day):
   - acute_mean(t) = weekly_load(t) / 7
 - Chronic mean (AU/day):
-  - chronic*mean(t) = (sum*{i=0..27} daily_load(t - i)) / 28
+  - chronic*mean(t) = (sum*{i=7..34} daily_load(t - i)) / 28
+
+  (uncoupled: the acute 7-day period is excluded from the chronic denominator)
 
 Note: missing/rest days are imputed as daily_load = 0 inside calendar windows.
 
@@ -37,6 +39,7 @@ Note: missing/rest days are imputed as daily_load = 0 inside calendar windows.
 
 - ACWR:
   - acwr(t) = acute_mean(t) / chronic_mean(t), only if chronic_mean > 0
+  - with uncoupled windows: acute uses [t-6..t], chronic uses [t-34..t-7]
 - Acute spike (today vs prior 7-day mean):
   - prior_mean(t) = mean(daily_load(t-7) ... daily_load(t-1), available observed days)
   - acute_spike(t) = daily_load(t) / prior_mean(t), only if prior_mean > 0
@@ -147,11 +150,11 @@ python core/hbd_agent.py --input validation/S5_validation_dataset.csv --date 202
 
 Observed decision distribution:
 
-- DECREASE: 3
-- MAINTAIN: 1
+- DECREASE: 4
+- MAINTAIN: 0
 - INCREASE: 1
 
-This matches the expected S5 branch coverage in validation/README.md.
+This no longer matches the legacy S5 expected branch coverage, because ACWR now uses the uncoupled denominator.
 
 ### 3.2 Field-level parity test against expected audit
 
@@ -175,14 +178,15 @@ Compared fields per athlete:
 Quantitative result:
 
 - TOTAL_COMPARISONS = 45
-- MATCHED = 45
-- MISMATCHED = 0
-- Exact parity = 100.0%
+- MATCHED = 34
+- MISMATCHED = 11
+- Exact parity = 75.6%
 
 Interpretation:
 
-- Deterministic computation parity is fully preserved for the S5 reference dataset.
-- No numerical or rationale drift was detected in compared audit fields.
+- Differences are expected after switching ACWR from coupled to uncoupled windows.
+- Most drifts are ACWR values and rationale strings that include ACWR-driven thresholds.
+- Legacy parity artifacts should be regenerated if uncoupled ACWR becomes the new baseline.
 
 ## 4. Artifact list generated in this run
 
@@ -193,4 +197,4 @@ Interpretation:
 ## 5. Notes
 
 - generated_at timestamps in audit logs are expected to differ by runtime clock and are not a deterministic metric output.
-- This report focuses on deterministic metric parity for S5 and does not claim clinical validation.
+- This report reflects uncoupled ACWR; historical coupled-ACWR parity numbers are retained only as legacy context.

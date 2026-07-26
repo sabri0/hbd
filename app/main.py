@@ -124,12 +124,12 @@ def api_athlete(name: str, date: Optional[str] = None):
     for i in range(27, -1, -1):
         d = ref - timedelta(days=i)
         loads.append({"date": d.isoformat(), "load": series.get(d, {}).get("load", 0.0)})
-    # 14-day ACWR + wellness lines (rolling means over calendar windows)
+    # 14-day ACWR + wellness lines (uncoupled ACWR over calendar windows)
     acwr_series, wellness_series = [], []
     for i in range(13, -1, -1):
         d = ref - timedelta(days=i)
         aw = core.window_loads(series, d, core.ACUTE_DAYS)
-        cw = core.window_loads(series, d, core.CHRONIC_DAYS)
+        cw = core.window_loads(series, d - timedelta(days=core.ACUTE_DAYS), core.CHRONIC_DAYS)
         am = sum(aw) / len(aw) if aw else 0.0
         cm = sum(cw) / len(cw) if cw else 0.0
         acwr_series.append({"date": d.isoformat(), "acwr": round(am / cm, 2) if cm > 0 else None})

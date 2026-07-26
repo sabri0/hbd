@@ -259,7 +259,9 @@ def compute_metrics(series, ref_date):
     if ref_date not in series:
         return None
     acute_window = window_loads(series, ref_date, ACUTE_DAYS)
-    chronic_window = window_loads(series, ref_date, CHRONIC_DAYS)
+    # Uncoupled ACWR: chronic window excludes the current acute period to avoid
+    # mathematical coupling between numerator and denominator.
+    chronic_window = window_loads(series, ref_date - timedelta(days=ACUTE_DAYS), CHRONIC_DAYS)
 
     daily_load = series[ref_date]["load"]
     weekly_load = sum(acute_window)
@@ -273,7 +275,7 @@ def compute_metrics(series, ref_date):
         monotony = None
     strain = weekly_load * monotony if monotony is not None else None
 
-    # ACWR: acute mean daily / chronic mean daily
+    # ACWR (uncoupled): acute mean daily / chronic mean daily (acute excluded)
     acwr = (acute_mean / chronic_daily_mean) if chronic_daily_mean > 0 else None
 
     # Acute spike: today vs 7-day mean (excluding today if possible)

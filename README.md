@@ -1,8 +1,6 @@
 # HBOD — Training-Load & Wellness Monitor
 
-**Supplementary Materials** for the manuscript *HBOD (Hooper-Borg-Oslo-Dergaa): an autonomous artificial intelligence agent and free application for monitoring athletes’ daily
-
-training-load, wellness, and health*
+**Supplementary Materials** for the manuscript _HBOD (Hooper-Borg-Oslo-Dergaa): an autonomous artificial intelligence agent and free application for monitoring athletes' daily training-load, wellness, and health_
 
 This repository is the reference implementation described in the article. It bundles the free web application, the deterministic decision core and its code listing, the synthetic validation data, and the orchestration/deployment assets — everything needed to reproduce every number, figure and recommendation reported in the paper.
 
@@ -38,16 +36,16 @@ This repository is the reference implementation described in the article. It bun
 
 Every metric is computed **deterministically**. Generative AI, where used, only rephrases already-computed output — it never alters a value.
 
-| Item | File(s) | Description |
-|---|---|---|
-| **S1** | `HBD_App.html` | Free, standalone single-file web application. Runs in any browser and computes entirely on the client — no server, no install, no data upload. The same deterministic logic as the core; suitable for a single coach with no infrastructure. *(The `app/` + `core/` in this repo is the full server-backed equivalent with a multi-athlete dashboard, scheduler and audit log.)* |
-| **S2** | `core/hbd_agent.py`, `HBD_Supplementary_Code.html` | The deterministic decision core and a rendered, syntax-highlighted listing of its source. `hbd_agent.py` is the portable, zero-web-dependency implementation of every index, threshold and decision; the HTML listing is the same code for review and reproducibility. |
-| **S3** | `S3_analysis_prompt.md`, `core/analysis_prompt.py` | The generative-AI analysis prompt used to produce a narrative interpretation of the computed data, plus the module that builds the deterministic data block and (optionally) calls a model to render the coach brief. Constrains the model to describing and contextualising the deterministic outputs — it cannot recompute, override or invent metrics. |
-| **S4** | `S4_HBOD_Monitoring_Form.docx` | The daily monitoring form template: every field and its response scale (see [§9](#9-data-model-and-input-format)). |
-| **S5** | `validation/` | A small synthetic dataset (`S5_validation_dataset.csv`, 5 athletes × 28 days) with its corresponding worked example output (`S5_example_output.txt`, `S5_example_report.html`, `S5_example_audit.csv`), used to validate the pipeline: given inputs → expected indices, decision and rationale. Each athlete targets one decision branch (INCREASE / MAINTAIN / spike-DECREASE / wellness-DECREASE / REDUCE & REFER). See [`validation/README.md`](validation/README.md) for the reproduce command. |
-| **S6** | `data/cohort_football_100.csv`, `data/S6_HBD_Synthetic_Cohort_100players.xlsx` | A synthetic 100-player football cohort, as a comma-separated file and as an Excel workbook. The workbook holds three sheets — raw data, computed per-player metrics, and variable definitions — plus the supplementary figures: the squad wellness heatmap, the exponentially-weighted vs. rolling workload (ACWR) ratio, and the readiness-score distribution. |
+| Item   | File(s)                                                                        | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------ | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **S1** | `HBD_App.html`                                                                 | Free, standalone single-file web application. Runs in any browser and computes entirely on the client — no server, no install, no data upload. The same deterministic logic as the core; suitable for a single coach with no infrastructure. _(The `app/` + `core/` in this repo is the full server-backed equivalent with a multi-athlete dashboard, scheduler and audit log.)_                                                                                                                    |
+| **S2** | `core/hbd_agent.py`, `HBD_Supplementary_Code.html`                             | The deterministic decision core and a rendered, syntax-highlighted listing of its source. `hbd_agent.py` is the portable, zero-web-dependency implementation of every index, threshold and decision; the HTML listing is the same code for review and reproducibility.                                                                                                                                                                                                                              |
+| **S3** | `S3_analysis_prompt.md`, `core/analysis_prompt.py`                             | The generative-AI analysis prompt used to produce a narrative interpretation of the computed data, plus the module that builds the deterministic data block and (optionally) calls a model to render the coach brief. Constrains the model to describing and contextualising the deterministic outputs — it cannot recompute, override or invent metrics.                                                                                                                                           |
+| **S4** | `S4_HBOD_Monitoring_Form.docx`                                                 | The daily monitoring form template: every field and its response scale (see [§9](#9-data-model-and-input-format)).                                                                                                                                                                                                                                                                                                                                                                                  |
+| **S5** | `validation/`                                                                  | A small synthetic dataset (`S5_validation_dataset.csv`, 5 athletes × 28 days) with its corresponding worked example output (`S5_example_output.txt`, `S5_example_report.html`, `S5_example_audit.csv`), used to validate the pipeline: given inputs → expected indices, decision and rationale. Each athlete targets one decision branch (INCREASE / MAINTAIN / spike-DECREASE / wellness-DECREASE / REDUCE & REFER). See [`validation/README.md`](validation/README.md) for the reproduce command. |
+| **S6** | `data/cohort_football_100.csv`, `data/S6_HBD_Synthetic_Cohort_100players.xlsx` | A synthetic 100-player football cohort, as a comma-separated file and as an Excel workbook. The workbook holds three sheets — raw data, computed per-player metrics, and variable definitions — plus the supplementary figures: the squad wellness heatmap, the exponentially-weighted vs. rolling workload (ACWR) ratio, and the readiness-score distribution.                                                                                                                                     |
 
-Companion documents also provided: `HBOD_Manuscript_BiologyOfSport - ID.docx` (the manuscript). Items marked *italic* are external artifacts referenced by the article; the code, data and deployment assets they describe are all in this repository.
+Companion documents also provided: `HBOD_Manuscript_BiologyOfSport - ID.docx` (the manuscript). Items marked _italic_ are external artifacts referenced by the article; the code, data and deployment assets they describe are all in this repository.
 
 ---
 
@@ -72,20 +70,20 @@ All metrics and decisions are computed **deterministically** in the core. The wo
 
 Every index below is computed per athlete on a reference day from that athlete's own history. Rest days count as a load of 0, as required for Foster monotony/strain and for ACWR baselines.
 
-| Index | Definition | Units / range | Reference |
-|---|---|---|---|
-| **Session load** | session duration (min) × RPE | AU | Foster session-RPE |
-| **Daily load** | sum of that day's session loads | AU | — |
-| **Weekly load** | sum of daily loads over the 7-day acute window | AU | Foster 1998 |
-| **Acute mean** | mean daily load over 7 days | AU/day | — |
-| **Chronic mean** | mean daily load over 28 days | AU/day | — |
-| **Monotony** | acute mean ÷ SD of the 7 daily loads (population SD; needs ≥2 days, SD > 0) | ratio | Foster 1998 |
-| **Strain** | weekly load × monotony | AU | Foster 1998 |
-| **ACWR** | acute mean ÷ chronic mean; reference band 0.80–1.30, red ≥ 1.50 | ratio | Hulin & Gabbett, BJSM 2019 |
-| **Acute spike** | today's load ÷ mean of the prior 7 days (today excluded) | ratio | — |
-| **Wellness composite** | mean of the 4 Hooper items (fatigue, stress, soreness, sleep), each recorded 1 = best … 7 = worst and flipped to `8 − x` so **higher = better** | ~1–7 | Hooper & Mackinnon |
-| **Wellness z-score** | (today's composite − 28-day personal baseline mean) ÷ baseline SD (needs ≥3 baseline days, SD > 0) | SD | — |
-| **Data confidence** | days logged in the last 28: ≥14 = *high*, ≥7 = *moderate*, else *low* (adds a caution note) | tier | — |
+| Index                  | Definition                                                                                                                                      | Units / range | Reference                  |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------- | -------------------------- |
+| **Session load**       | session duration (min) × RPE                                                                                                                    | AU            | Foster session-RPE         |
+| **Daily load**         | sum of that day's session loads                                                                                                                 | AU            | —                          |
+| **Weekly load**        | sum of daily loads over the 7-day acute window                                                                                                  | AU            | Foster 1998                |
+| **Acute mean**         | mean daily load over 7 days                                                                                                                     | AU/day        | —                          |
+| **Chronic mean**       | mean daily load over the prior 28 days excluding the acute 7-day period                                                                         | AU/day        | —                          |
+| **Monotony**           | acute mean ÷ SD of the 7 daily loads (population SD; needs ≥2 days, SD > 0)                                                                     | ratio         | Foster 1998                |
+| **Strain**             | weekly load × monotony                                                                                                                          | AU            | Foster 1998                |
+| **ACWR**               | uncoupled ratio: acute mean (last 7 days) ÷ chronic mean (prior 28 days, acute excluded); reference band 0.80–1.30, red ≥ 1.50                  | ratio         | Hulin & Gabbett, BJSM 2019 |
+| **Acute spike**        | today's load ÷ mean of the prior 7 days (today excluded)                                                                                        | ratio         | —                          |
+| **Wellness composite** | mean of the 4 Hooper items (fatigue, stress, soreness, sleep), each recorded 1 = best … 7 = worst and flipped to `8 − x` so **higher = better** | ~1–7          | Hooper & Mackinnon         |
+| **Wellness z-score**   | (today's composite − 28-day personal baseline mean) ÷ baseline SD (needs ≥3 baseline days, SD > 0)                                              | SD            | —                          |
+| **Data confidence**    | days logged in the last 28: ≥14 = _high_, ≥7 = _moderate_, else _low_ (adds a caution note)                                                     | tier          | —                          |
 
 All windows are **calendar** windows anchored on the reference day, so a missed day lowers the mean rather than being skipped.
 
@@ -103,7 +101,7 @@ The next-day direction is chosen from explicit, named thresholds (all defined at
 - **INCREASE** — at least **two** green signals: ACWR < **0.80** **and** wellness at/above baseline (z ≥ 0).
 - **MAINTAIN** — everything else.
 
-Low data confidence never changes the direction on its own; it appends an *"interpret with caution"* note to the rationale. Each firing threshold is written into the rationale in plain language (e.g. *"acute load spike (2.0x recent mean)"*), so the coach can trace any call back to its numbers. A deterministic **strategy** string (concrete coaching action) is attached to every decision.
+Low data confidence never changes the direction on its own; it appends an _"interpret with caution"_ note to the rationale. Each firing threshold is written into the rationale in plain language (e.g. _"acute load spike (2.0x recent mean)"_), so the coach can trace any call back to its numbers. A deterministic **strategy** string (concrete coaching action) is attached to every decision.
 
 ---
 
@@ -112,13 +110,13 @@ Low data confidence never changes the direction on its own; it appends an *"inte
 Health sits **above** load and wellness in three graded tiers. The tool never advises loading an athlete who flagged a health problem.
 
 - **Daily pain gate** — a per-day yes/no pain flag with optional location.
-- **Weekly OSTRC-H** (Clarsen 2014) — four items scored 0–25; **severity = sum(Q1..Q4)**, range **0–100**. A *substantial problem* = any of the first three items (participation, training volume, performance) ≥ **17**. *Could not participate* = any of those three ≥ **25**.
+- **Weekly OSTRC-H** (Clarsen 2014) — four items scored 0–25; **severity = sum(Q1..Q4)**, range **0–100**. A _substantial problem_ = any of the first three items (participation, training volume, performance) ≥ **17**. _Could not participate_ = any of those three ≥ **25**.
 
-| Tier | Trigger | Action |
-|---|---|---|
-| **HOLD** | any reported pain / minor flag | never increase (INCREASE → MAINTAIN), monitor |
-| **REDUCE & REFER** | substantial OSTRC problem (item ≥ 17) | cut load, refer to medical staff |
-| **STOP** | "could not participate" (item ≥ 25) | no training, urgent medical assessment |
+| Tier               | Trigger                               | Action                                        |
+| ------------------ | ------------------------------------- | --------------------------------------------- |
+| **HOLD**           | any reported pain / minor flag        | never increase (INCREASE → MAINTAIN), monitor |
+| **REDUCE & REFER** | substantial OSTRC problem (item ≥ 17) | cut load, refer to medical staff              |
+| **STOP**           | "could not participate" (item ≥ 25)   | no training, urgent medical assessment        |
 
 The override rewrites both the decision and the strategy, and prepends the health reason to the rationale.
 
@@ -139,14 +137,14 @@ So that wellness — not only load — can drive the call, the core raises plain
 
 Derived from the same inputs and surfaced in the report and dashboard:
 
-| Metric | Definition | Reference |
-|---|---|---|
-| **EWMA-ACWR** | exponentially-weighted ACWR (acute span 7, chronic span 28, 42-day look-back) | Williams 2017 |
-| **Weekly ramp %** | (this week − last week) ÷ last week × 100 | Gabbett 2016 |
-| **Training stress balance (TSB)** | chronic mean − acute mean (positive = freshening, negative = fatiguing) | — |
-| **Hooper total** | sum of the four Hooper items as recorded (range 4–28, higher = worse) | Hooper & Mackinnon |
-| **Sleep index** | today's value, 7-day mean, and a "sleep debt" flag when the weekly mean ≥ 4.5/7 | — |
-| **Readiness score** | 0–100 heuristic blending wellness-vs-baseline and the workload ratio (documented in code) | — |
+| Metric                            | Definition                                                                                | Reference          |
+| --------------------------------- | ----------------------------------------------------------------------------------------- | ------------------ |
+| **EWMA-ACWR**                     | exponentially-weighted ACWR (acute span 7, chronic span 28, 42-day look-back)             | Williams 2017      |
+| **Weekly ramp %**                 | (this week − last week) ÷ last week × 100                                                 | Gabbett 2016       |
+| **Training stress balance (TSB)** | chronic mean − acute mean (positive = freshening, negative = fatiguing)                   | —                  |
+| **Hooper total**                  | sum of the four Hooper items as recorded (range 4–28, higher = worse)                     | Hooper & Mackinnon |
+| **Sleep index**                   | today's value, 7-day mean, and a "sleep debt" flag when the weekly mean ≥ 4.5/7           | —                  |
+| **Readiness score**               | 0–100 heuristic blending wellness-vs-baseline and the workload ratio (documented in code) | —                  |
 
 ---
 
@@ -175,17 +173,17 @@ French Google-Form exports work unchanged (`Horodateur, Nom d'utilisateur, Qui e
 
 **Fields and scales (S4 monitoring form):**
 
-| Field | Scale | Notes |
-|---|---|---|
-| Timestamp | date-time | day of the entry |
-| Athlete ID / email | text | grouping key |
-| Player / name | text | display name |
-| Session timing | Morning / Afternoon / Evening | descriptive |
-| Session duration | minutes | > 0 |
-| Intensity (RPE) | Borg CR-10, 0–10 | session RPE |
-| Fatigue, Stress, Soreness, Sleep | 1 = best … 7 = worst | four Hooper items |
-| Specific pain | yes / no (+ location) | daily pain gate |
-| OSTRC_Q1..Q4 | 0–25 each | weekly OSTRC-H (participation, volume, performance, symptoms) |
+| Field                            | Scale                         | Notes                                                         |
+| -------------------------------- | ----------------------------- | ------------------------------------------------------------- |
+| Timestamp                        | date-time                     | day of the entry                                              |
+| Athlete ID / email               | text                          | grouping key                                                  |
+| Player / name                    | text                          | display name                                                  |
+| Session timing                   | Morning / Afternoon / Evening | descriptive                                                   |
+| Session duration                 | minutes                       | > 0                                                           |
+| Intensity (RPE)                  | Borg CR-10, 0–10              | session RPE                                                   |
+| Fatigue, Stress, Soreness, Sleep | 1 = best … 7 = worst          | four Hooper items                                             |
+| Specific pain                    | yes / no (+ location)         | daily pain gate                                               |
+| OSTRC_Q1..Q4                     | 0–25 each                     | weekly OSTRC-H (participation, volume, performance, symptoms) |
 
 To use your own data, replace the CSV (or point `HBD_DATA` at it) — no code change is needed as long as headers contain the recognisable keywords.
 
@@ -279,17 +277,17 @@ A thin **FastAPI** layer over the core (`app/main.py`). It computes no number th
 
 **API:**
 
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/api/squad?date=YYYY-MM-DD` | Per-athlete decisions + metrics for the squad (defaults to latest data day) |
-| GET | `/api/athletes` | Athlete names |
-| GET | `/api/athlete/{name}?date=` | Full detail: metrics, decision, rationale, strategy, health, 28-day loads, 14-day ACWR/wellness series |
-| POST | `/api/checkin` | Append one self-report (JSON) to the responses CSV |
-| POST | `/api/run?date=` | Run the pipeline now: write HTML report + append audit log |
-| GET | `/api/audit` / `/api/audit.csv` | Audit log as JSON / CSV download |
-| GET | `/api/report/text` | Plain-text report |
-| GET | `/report` | Latest generated HTML report |
-| GET | `/health` | Container healthcheck |
+| Method | Path                            | Purpose                                                                                                |
+| ------ | ------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| GET    | `/api/squad?date=YYYY-MM-DD`    | Per-athlete decisions + metrics for the squad (defaults to latest data day)                            |
+| GET    | `/api/athletes`                 | Athlete names                                                                                          |
+| GET    | `/api/athlete/{name}?date=`     | Full detail: metrics, decision, rationale, strategy, health, 28-day loads, 14-day ACWR/wellness series |
+| POST   | `/api/checkin`                  | Append one self-report (JSON) to the responses CSV                                                     |
+| POST   | `/api/run?date=`                | Run the pipeline now: write HTML report + append audit log                                             |
+| GET    | `/api/audit` / `/api/audit.csv` | Audit log as JSON / CSV download                                                                       |
+| GET    | `/api/report/text`              | Plain-text report                                                                                      |
+| GET    | `/report`                       | Latest generated HTML report                                                                           |
+| GET    | `/health`                       | Container healthcheck                                                                                  |
 
 Example check-in:
 
@@ -300,7 +298,7 @@ curl -X POST http://localhost:8000/api/checkin \
        "fatigue":4,"stress":3,"soreness":4,"sleep":2,"pain":false}'
 ```
 
-**Scheduler.** On startup the app registers an APScheduler cron job at **20:00 `HBD_TZ`** (default Africa/Tunis) that runs the full pipeline — mirroring the BPMN timer. You can also trigger it any time from the *Reports* tab or with `POST /api/run`.
+**Scheduler.** On startup the app registers an APScheduler cron job at **20:00 `HBD_TZ`** (default Africa/Tunis) that runs the full pipeline — mirroring the BPMN timer. You can also trigger it any time from the _Reports_ tab or with `POST /api/run`.
 
 ---
 
@@ -312,12 +310,12 @@ curl -X POST http://localhost:8000/api/checkin \
 docker compose up -d --build
 ```
 
-| URL | What |
-|---|---|
-| http://localhost:8000 | Coach dashboard |
-| http://localhost:8000/checkin | Athlete mobile check-in form |
-| http://localhost:8000/report | Latest generated daily report |
-| http://localhost:8000/docs | Interactive API docs (Swagger) |
+| URL                           | What                           |
+| ----------------------------- | ------------------------------ |
+| http://localhost:8000         | Coach dashboard                |
+| http://localhost:8000/checkin | Athlete mobile check-in form   |
+| http://localhost:8000/report  | Latest generated daily report  |
+| http://localhost:8000/docs    | Interactive API docs (Swagger) |
 
 `/data` and `/output` are named volumes, so check-ins, reports and the audit log survive restarts. The image is `python:3.12-slim`, ships the seed data baked in, and exposes a `/health` container healthcheck.
 
@@ -327,11 +325,11 @@ docker compose up -d --build
 
 ## 14. Configuration
 
-| Env var | Default | Meaning |
-|---|---|---|
-| `HBD_DATA` | `/data/cohort_football_100.csv` | Responses CSV/XLSX path |
-| `HBD_OUTPUT` | `/output` | Reports + audit-log directory |
-| `HBD_TZ` | `Africa/Tunis` | Scheduler time-zone (daily 20:00 run) |
+| Env var      | Default                         | Meaning                               |
+| ------------ | ------------------------------- | ------------------------------------- |
+| `HBD_DATA`   | `/data/cohort_football_100.csv` | Responses CSV/XLSX path               |
+| `HBD_OUTPUT` | `/output`                       | Reports + audit-log directory         |
+| `HBD_TZ`     | `Africa/Tunis`                  | Scheduler time-zone (daily 20:00 run) |
 
 ---
 
@@ -354,4 +352,3 @@ Replace the credential IDs, the Drive file ID and the coach email. The business 
 - **Auditable.** Every run appends one timestamped row per athlete to `audit.csv`; every threshold that fired is written into the rationale in plain language.
 - **AI is downstream only.** A language model may rephrase the report for readability; it can never recompute, override or invent a metric. The analysis prompt (S3) is constrained accordingly.
 - **Safety.** The health module sits above load and wellness, in three graded tiers; the tool never advises increasing load for an athlete who reported a health problem. Recommendations are decision support — the coach always judges, and anything clinical goes to the medical staff.
-
