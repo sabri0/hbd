@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-HBD
-Hooper-Borg-Dergaa Agent (HBD): deterministic core behind the HBD application.
+HBOD
+Hooper-Borg-Oslo-Dergaa Agent (HBOD): deterministic core behind the HBOD application.
 Daily training-load and wellness monitoring with next-day decisions, for any sport.
 
 Pipeline:
@@ -37,8 +37,7 @@ WELLNESS_BASELINE_DAYS = 28
 # Acute:chronic workload ratio reference band. Treated as a prompt for judgement,
 # not a verdict (see Hulin & Gabbett, BJSM 2019).
 ACWR_LOW = 0.80      # below this: room to add load
-ACWR_HIGH = 1.30     # above this: caution
-ACWR_RED = 1.50      # above this: clear overload signal
+ACWR_HIGH = 1.30     # above this: overload signal
 
 MONOTONY_HIGH = 2.0  # Foster 1998: high monotony with high load raises risk
 WELLNESS_DROP_Z = -1.0   # today's wellness this far below personal baseline = red
@@ -59,7 +58,7 @@ COLMAP = {
     "stress": ["stress"],
     "soreness": ["courbatur", "muscle", "soreness"],
     "sleep": ["sommeil", "sleep"],
-    # Health / injury module (HBD daily pain gate + weekly OSTRC-H)
+    # Health / injury module (HBOD daily pain gate + weekly OSTRC-H)
     "pain": ["douleur", "gêne", "gene specifique", "pain", "health problem"],
     "pain_location": ["localis", "location", "zone"],
     "ostrc_q1": ["ostrc_q1", "participation"],
@@ -329,10 +328,8 @@ def decide(m):
     green = []
 
     if m["acwr"] is not None:
-        if m["acwr"] >= ACWR_RED:
-            red.append(f"ACWR {m['acwr']} is high (>= {ACWR_RED}), workload spike")
-        elif m["acwr"] > ACWR_HIGH:
-            red.append(f"ACWR {m['acwr']} above the {ACWR_HIGH} caution band")
+        if m["acwr"] > ACWR_HIGH:
+            red.append(f"ACWR {m['acwr']} above the {ACWR_HIGH} threshold")
         elif m["acwr"] < ACWR_LOW:
             green.append(f"ACWR {m['acwr']} below {ACWR_LOW}, room to load")
 
@@ -415,7 +412,7 @@ def build_report(results, ref_date):
         </tr>"""
 
     html = f"""<!DOCTYPE html><html><body style="font-family:Arial,Helvetica,sans-serif;color:#1a1a1a;max-width:880px">
-    <h2 style="color:#1F3864;margin-bottom:2px">HBD daily report</h2>
+    <h2 style="color:#1F3864;margin-bottom:2px">HBOD daily report</h2>
     <p style="color:#555;margin-top:0">Data through {ref_date.isoformat()} &middot; recommendation for {tomorrow.isoformat()}</p>
     <p>Athletes analysed: <b>{n}</b> &nbsp;|&nbsp;
        <span style="color:{BADGE['DECREASE']}">Decrease: {counts['DECREASE']}</span> &nbsp;
@@ -429,11 +426,11 @@ def build_report(results, ref_date):
     <p style="font-size:12px;color:#777;margin-top:14px">
       Recommendations are decision support, not verdicts. ACWR and related indices flag patterns for the coach to judge.
       Increase = room to progress load. Decrease = ease tomorrow. Maintain = hold the plan.
-      Generated automatically by HBD.</p>
+    Generated automatically by HBOD.</p>
     </body></html>"""
 
     # plain text
-    lines = [f"HBD daily report - data through {ref_date.isoformat()}",
+    lines = [f"HBOD daily report - data through {ref_date.isoformat()}",
              f"Recommendation for {tomorrow.isoformat()}",
              f"Decrease {counts['DECREASE']} | Maintain {counts['MAINTAIN']} | Increase {counts['INCREASE']}", ""]
     for r in sorted(results, key=lambda x: ["DECREASE", "MAINTAIN", "INCREASE"].index(x["decision"])):
@@ -782,7 +779,7 @@ def run(input_csv, ref_date=None, out_html=None, audit_log=None, mode="auto"):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="HBD training-load monitoring agent")
+    ap = argparse.ArgumentParser(description="HBOD training-load monitoring agent")
     ap.add_argument("--input", required=True, help="responses CSV exported from the form sheet")
     ap.add_argument("--date", help="reference day YYYY-MM-DD (default: latest in data)")
     ap.add_argument("--out", default="hbd_report.html", help="HTML report path")

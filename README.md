@@ -4,7 +4,7 @@
 
 This repository is the reference implementation described in the article. It bundles the free web application, the deterministic decision core and its code listing, the synthetic validation data, and the orchestration/deployment assets — everything needed to reproduce every number, figure and recommendation reported in the paper.
 
-**HBD** is a daily training-load and wellness monitor for sports teams. Each athlete submits a 60-second self-report; a **deterministic** decision core computes validated sport-science indices per athlete and recommends the next day's training direction — **INCREASE**, **MAINTAIN** or **DECREASE** — with a full, auditable rationale for the coach.
+**HBOD** is a daily training-load and wellness monitor for sports teams. Each athlete submits a 60-second self-report; a **deterministic** decision core computes validated sport-science indices per athlete and recommends the next day's training direction — **INCREASE**, **MAINTAIN** or **DECREASE** — with a full, auditable rationale for the coach.
 
 > Recommendations are decision support, not verdicts. The coach always judges. The tool never advises loading an athlete who reported a health problem.
 
@@ -36,14 +36,14 @@ This repository is the reference implementation described in the article. It bun
 
 Every metric is computed **deterministically**. Generative AI, where used, only rephrases already-computed output — it never alters a value.
 
-| Item   | File(s)                                                                        | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| ------ | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **S1** | `HBD_App.html`                                                                 | Free, standalone single-file web application. Runs in any browser and computes entirely on the client — no server, no install, no data upload. The same deterministic logic as the core; suitable for a single coach with no infrastructure. _(The `app/` + `core/` in this repo is the full server-backed equivalent with a multi-athlete dashboard, scheduler and audit log.)_                                                                                                                    |
-| **S2** | `core/hbd_agent.py`, `HBD_Supplementary_Code.html`                             | The deterministic decision core and a rendered, syntax-highlighted listing of its source. `hbd_agent.py` is the portable, zero-web-dependency implementation of every index, threshold and decision; the HTML listing is the same code for review and reproducibility.                                                                                                                                                                                                                              |
-| **S3** | `S3_analysis_prompt.md`, `core/analysis_prompt.py`                             | The generative-AI analysis prompt used to produce a narrative interpretation of the computed data, plus the module that builds the deterministic data block and (optionally) calls a model to render the coach brief. Constrains the model to describing and contextualising the deterministic outputs — it cannot recompute, override or invent metrics.                                                                                                                                           |
-| **S4** | `S4_HBOD_Monitoring_Form.docx`                                                 | The daily monitoring form template: every field and its response scale (see [§9](#9-data-model-and-input-format)).                                                                                                                                                                                                                                                                                                                                                                                  |
-| **S5** | `validation/`                                                                  | A small synthetic dataset (`S5_validation_dataset.csv`, 5 athletes × 28 days) with its corresponding worked example output (`S5_example_output.txt`, `S5_example_report.html`, `S5_example_audit.csv`), used to validate the pipeline: given inputs → expected indices, decision and rationale. Each athlete targets one decision branch (INCREASE / MAINTAIN / spike-DECREASE / wellness-DECREASE / REDUCE & REFER). See [`validation/README.md`](validation/README.md) for the reproduce command. |
-| **S6** | `data/cohort_football_100.csv`, `data/S6_HBD_Synthetic_Cohort_100players.xlsx` | A synthetic 100-player football cohort, as a comma-separated file and as an Excel workbook. The workbook holds three sheets — raw data, computed per-player metrics, and variable definitions — plus the supplementary figures: the squad wellness heatmap, the exponentially-weighted vs. rolling workload (ACWR) ratio, and the readiness-score distribution.                                                                                                                                     |
+| Item   | File(s)                                                                         | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------ | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **S1** | `HBOD_App.html`                                                                 | Single-file web application artifact for the HBOD dashboard layer. _(The `app/` + `core/` in this repo is the full server-backed equivalent with a multi-athlete dashboard, scheduler and audit log.)_                                                                                                                                                                                                                                                                                              |
+| **S2** | `core/hbd_agent.py`, `HBOD_Supplementary_Code.html`                             | The deterministic decision core and a rendered, syntax-highlighted listing of its source. `hbd_agent.py` is the portable, zero-web-dependency implementation of every index, threshold and decision; the HTML listing is the same code for review and reproducibility.                                                                                                                                                                                                                              |
+| **S3** | `S3_analysis_prompt.md`, `core/analysis_prompt.py`                              | The generative-AI analysis prompt used to produce a narrative interpretation of the computed data, plus the module that builds the deterministic data block and (optionally) calls a model to render the coach brief. Constrains the model to describing and contextualising the deterministic outputs — it cannot recompute, override or invent metrics.                                                                                                                                           |
+| **S4** | `S4_HBOD_Monitoring_Form.docx`                                                  | The daily monitoring form template: every field and its response scale (see [§9](#9-data-model-and-input-format)).                                                                                                                                                                                                                                                                                                                                                                                  |
+| **S5** | `validation/`                                                                   | A small synthetic dataset (`S5_validation_dataset.csv`, 5 athletes × 28 days) with its corresponding worked example output (`S5_example_output.txt`, `S5_example_report.html`, `S5_example_audit.csv`), used to validate the pipeline: given inputs → expected indices, decision and rationale. Each athlete targets one decision branch (INCREASE / MAINTAIN / spike-DECREASE / wellness-DECREASE / REDUCE & REFER). See [`validation/README.md`](validation/README.md) for the reproduce command. |
+| **S6** | `data/cohort_football_100.csv`, `data/S6_HBOD_Synthetic_Cohort_100players.xlsx` | A synthetic 100-player football cohort, as a comma-separated file and as an Excel workbook. The workbook holds three sheets — raw data, computed per-player metrics, and variable definitions — plus the supplementary figures: the squad wellness heatmap, the exponentially-weighted vs. rolling workload (ACWR) ratio, and the readiness-score distribution.                                                                                                                                     |
 
 Companion documents also provided: `HBOD_Manuscript_BiologyOfSport - ID.docx` (the manuscript). Items marked _italic_ are external artifacts referenced by the article; the code, data and deployment assets they describe are all in this repository.
 
@@ -55,7 +55,7 @@ Companion documents also provided: `HBOD_Manuscript_BiologyOfSport - ID.docx` (t
 ATHLETE          end of training day ──► complete daily self-report
                                           (duration · RPE · Hooper wellness · pain · weekly OSTRC-H)
 FORM & STORAGE   response recorded in the responses sheet (CSV)
-HBD SYSTEM       timer 20:00 ──► ingest ──► parse & map columns (bilingual headers)
+HBOD SYSTEM      timer 20:00 ──► ingest ──► parse & map columns (bilingual headers)
                  ──► compute per-athlete metrics ──► health problem today? ──► apply health override
                  ──► decide next-day load (+ rationale & strategy)
                  ──► build daily report (HTML + text) ──► append audit log ──► email / serve to coach
@@ -79,7 +79,7 @@ Every index below is computed per athlete on a reference day from that athlete's
 | **Chronic mean**       | mean daily load over the prior 28 days excluding the acute 7-day period                                                                         | AU/day        | —                          |
 | **Monotony**           | acute mean ÷ SD of the 7 daily loads (population SD; needs ≥2 days, SD > 0)                                                                     | ratio         | Foster 1998                |
 | **Strain**             | weekly load × monotony                                                                                                                          | AU            | Foster 1998                |
-| **ACWR**               | uncoupled ratio: acute mean (last 7 days) ÷ chronic mean (prior 28 days, acute excluded); reference band 0.80–1.30, red ≥ 1.50                  | ratio         | Hulin & Gabbett, BJSM 2019 |
+| **ACWR**               | uncoupled ratio: acute mean (last 7 days) ÷ chronic mean (prior 28 days, acute excluded); reference band 0.80–1.30, threshold > 1.30            | ratio         | Hulin & Gabbett, BJSM 2019 |
 | **Acute spike**        | today's load ÷ mean of the prior 7 days (today excluded)                                                                                        | ratio         | —                          |
 | **Wellness composite** | mean of the 4 Hooper items (fatigue, stress, soreness, sleep), each recorded 1 = best … 7 = worst and flipped to `8 − x` so **higher = better** | ~1–7          | Hooper & Mackinnon         |
 | **Wellness z-score**   | (today's composite − 28-day personal baseline mean) ÷ baseline SD (needs ≥3 baseline days, SD > 0)                                              | SD            | —                          |
@@ -94,7 +94,7 @@ All windows are **calendar** windows anchored on the reference day, so a missed 
 The next-day direction is chosen from explicit, named thresholds (all defined at the top of `core/hbd_agent.py`):
 
 - **DECREASE** — any red flag:
-  - ACWR ≥ **1.50** (or > **1.30**, caution band),
+  - ACWR > **1.30**,
   - wellness ≤ **−1.0 SD** below personal baseline,
   - monotony ≥ **2.0**,
   - acute spike ≥ **1.5×** the recent mean.
@@ -187,7 +187,7 @@ French Google-Form exports work unchanged (`Horodateur, Nom d'utilisateur, Qui e
 
 To use your own data, replace the CSV (or point `HBD_DATA` at it) — no code change is needed as long as headers contain the recognisable keywords.
 
-**Synthetic cohort (S6).** `data/cohort_football_100.csv` and `data/S6_HBD_Synthetic_Cohort_100players.xlsx` provide 100 synthetic football players over several weeks (~2,500 daily entries). The workbook adds computed per-player metrics, variable definitions, and the supplementary figures (squad wellness heatmap; EWMA vs. rolling ACWR; readiness-score distribution). This is the dataset used to validate the pipeline and generate the example report.
+**Synthetic cohort (S6).** `data/cohort_football_100.csv` and `data/S6_HBOD_Synthetic_Cohort_100players.xlsx` provide 100 synthetic football players over several weeks (~2,500 daily entries). The workbook adds computed per-player metrics, variable definitions, and the supplementary figures (squad wellness heatmap; EWMA vs. rolling ACWR; readiness-score distribution). This is the dataset used to validate the pipeline and generate the example report.
 
 ---
 
@@ -205,7 +205,7 @@ HBDApp/
 │       └── checkin.html     # Athlete mobile daily check-in form
 ├── data/
 │   ├── cohort_football_100.csv                 # Synthetic 100-player football cohort — S6
-│   └── S6_HBD_Synthetic_Cohort_100players.xlsx # Same cohort as workbook (raw · metrics · definitions)
+│   └── S6_HBOD_Synthetic_Cohort_100players.xlsx # Same cohort as workbook (raw · metrics · definitions)
 ├── validation/              # S5: synthetic validation dataset + worked example output
 │   ├── S5_validation_dataset.csv               # 5 athletes × 28 days
 │   ├── S5_example_output.txt / .html           # Expected report from the core
@@ -270,7 +270,7 @@ A thin **FastAPI** layer over the core (`app/main.py`). It computes no number th
 **Dashboard** (`app/static/index.html`) — a single-page coach console with tabs:
 
 - **Squad** — decision counts, health-flag count, red-flag alerts, and a sortable per-athlete table (decision badge, ACWR, wellness + z, monotony, strain, weekly load, health, confidence, top reasons, readiness).
-- **Athletes** — per-athlete detail with a 28-day daily-load bar chart, 14-day ACWR line (band 0.80–1.30, red ≥ 1.50), 14-day wellness line vs. the dashed 28-day baseline, today's Hooper items, and the health module.
+- **Athletes** — per-athlete detail with a 28-day daily-load bar chart, 14-day ACWR line (band 0.80–1.30, threshold > 1.30), 14-day wellness line vs. the dashed 28-day baseline, today's Hooper items, and the health module.
 - **Reports** — the generated HTML daily report; a button triggers a run.
 - **Audit log** — the append-only audit table with a CSV download.
 - **Check-in ↗** — the athlete form (`checkin.html`), a 60-second mobile self-report.

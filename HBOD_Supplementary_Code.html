@@ -1,0 +1,798 @@
+<!DOCTYPE html><html><head><meta charset='utf-8'><title>HBOD Supplementary Code</title><style>body{font-family:Consolas,'Courier New',monospace;margin:24px;line-height:1.35;} pre{white-space:pre-wrap;word-break:break-word;background:#f6f8fa;border:1px solid #d0d7de;padding:16px;border-radius:8px;} h1{font-family:Segoe UI,Arial,sans-serif;} .meta{font-family:Segoe UI,Arial,sans-serif;color:#57606a;}</style></head><body><h1>HBOD Supplementary Code</h1><p class='meta'>Source: core/hbd_agent.py (deterministic decision core)</p><pre>#!/usr/bin/env python3
+&quot;&quot;&quot;
+HBOD
+Hooper-Borg-Oslo-Dergaa Agent (HBOD): deterministic core behind the HBOD application.
+Daily training-load and wellness monitoring with next-day decisions, for any sport.
+
+Pipeline:
+  1. Ingest daily self-report exported from the Google Form responses sheet.
+  2. Compute session-RPE load, daily/weekly load, monotony, strain, ACWR,
+     and a direction-harmonised wellness composite, per athlete.
+  3. Decide next-day training: INCREASE, DECREASE or MAINTAIN, with a rationale.
+  4. Produce a coach email (HTML + plain text) and append an audit log so every
+     recommendation is timestamped and reproducible.
+
+Design rule: all numbers are computed deterministically here. A language model,
+if used downstream, only rephrases this output. It never changes a metric.
+
+Author:  Dr. Ismail Dergaa et al. License: MIT.
+&quot;&quot;&quot;
+
+import argparse
+import csv
+import io
+import math
+import os
+import re
+import statistics as st
+from datetime import datetime, date, timedelta
+
+# ----------------------------------------------------------------------------
+# Configuration. Thresholds are explicit so the decision logic is auditable.
+# ----------------------------------------------------------------------------
+ACUTE_DAYS = 7
+CHRONIC_DAYS = 28
+WELLNESS_BASELINE_DAYS = 28
+
+# Acute:chronic workload ratio reference band. Treated as a prompt for judgement,
+# not a verdict (see Hulin &amp; Gabbett, BJSM 2019).
+ACWR_LOW = 0.80      # below this: room to add load
+ACWR_HIGH = 1.30     # above this: overload signal
+
+MONOTONY_HIGH = 2.0  # Foster 1998: high monotony with high load raises risk
+WELLNESS_DROP_Z = -1.0   # today&#x27;s wellness this far below personal baseline = red
+WELLNESS_GOOD_Z = 0.0    # at or above baseline = green
+ACUTE_SPIKE_RATIO = 1.5  # today&#x27;s load vs 7-day mean
+
+# ----------------------------------------------------------------------------
+# Column mapping. Matches French and English form headers (substring, lower-case).
+# ----------------------------------------------------------------------------
+COLMAP = {
+    &quot;timestamp&quot;: [&quot;horodat&quot;, &quot;timestamp&quot;],
+    &quot;email&quot;: [&quot;email&quot;, &quot;adresse&quot;, &quot;utilisateur&quot;, &quot;mail&quot;, &quot;athlete id&quot;],
+    &quot;athlete&quot;: [&quot;qui es&quot;, &quot;player&quot;, &quot;nageur&quot;, &quot;swimmer&quot;, &quot;athlete&quot;, &quot;name&quot;, &quot;nom&quot;],
+    &quot;moment&quot;: [&quot;moment&quot;, &quot;timing&quot;],
+    &quot;duration&quot;: [&quot;duree&quot;, &quot;durée&quot;, &quot;duration&quot;, &quot;min&quot;],
+    &quot;intensity&quot;: [&quot;intensite&quot;, &quot;intensité&quot;, &quot;intensity&quot;, &quot;cr-10&quot;, &quot;ressenti&quot;, &quot;rpe&quot;],
+    &quot;fatigue&quot;: [&quot;fatigu&quot;],
+    &quot;stress&quot;: [&quot;stress&quot;],
+    &quot;soreness&quot;: [&quot;courbatur&quot;, &quot;muscle&quot;, &quot;soreness&quot;],
+    &quot;sleep&quot;: [&quot;sommeil&quot;, &quot;sleep&quot;],
+    # Health / injury module (HBOD daily pain gate + weekly OSTRC-H)
+    &quot;pain&quot;: [&quot;douleur&quot;, &quot;gêne&quot;, &quot;gene specifique&quot;, &quot;pain&quot;, &quot;health problem&quot;],
+    &quot;pain_location&quot;: [&quot;localis&quot;, &quot;location&quot;, &quot;zone&quot;],
+    &quot;ostrc_q1&quot;: [&quot;ostrc_q1&quot;, &quot;participation&quot;],
+    &quot;ostrc_q2&quot;: [&quot;ostrc_q2&quot;, &quot;volume&quot;],
+    &quot;ostrc_q3&quot;: [&quot;ostrc_q3&quot;, &quot;performance ostrc&quot;, &quot;ostrc performance&quot;],
+    &quot;ostrc_q4&quot;: [&quot;ostrc_q4&quot;, &quot;symptom&quot;],
+}
+
+
+def _match_col(header_row):
+    &quot;&quot;&quot;Return {canonical: actual_header}. Key-priority match, one header per field.
+    Email is matched before athlete so &#x27;Nom d&#x27;utilisateur&#x27; is not taken as the name.&quot;&quot;&quot;
+    mapping = {}
+    used = set()
+    lowered = [(h, h.lower().strip()) for h in header_row]
+    for canon, keys in COLMAP.items():
+        for k in keys:                       # try keys in priority order
+            for h, hl in lowered:
+                if h in used:
+                    continue
+                if k in hl:
+                    mapping[canon] = h
+                    used.add(h)
+                    break
+            if canon in mapping:
+                break
+    return mapping
+
+
+def _to_float(x):
+    if x is None:
+        return None
+    s = str(x).strip().replace(&quot;,&quot;, &quot;.&quot;)
+    if s == &quot;&quot;:
+        return None
+    # handle values like &quot;5 - Beaucoup&quot; by taking the leading number
+    num = &quot;&quot;
+    for ch in s:
+        if ch.isdigit() or ch == &quot;.&quot; or (ch == &quot;-&quot; and num == &quot;&quot;):
+            num += ch
+        elif num:
+            break
+    try:
+        return float(num)
+    except ValueError:
+        return None
+
+
+def _yesno(x):
+    &quot;&quot;&quot;Map a free-text yes/no (French, Arabic, English) to True/False/None.&quot;&quot;&quot;
+    if x is None:
+        return None
+    s = str(x).strip().lower()
+    if s == &quot;&quot;:
+        return None
+    if s[0] in (&quot;o&quot;, &quot;y&quot;, &quot;1&quot;) or &quot;oui&quot; in s or &quot;yes&quot; in s or &quot;نعم&quot; in s:
+        return True
+    if s[0] in (&quot;n&quot;, &quot;0&quot;) or &quot;non&quot; in s or &quot;no&quot; in s or &quot;لا&quot; in s:
+        return False
+    return None
+
+
+def _parse_date(x):
+    if not x:
+        return None
+    s = str(x).strip()
+    s = re.sub(r&quot;\s+(UTC|GMT)[+-]?\d*&quot;, &quot;&quot;, s).strip()   # drop trailing timezone, e.g. &quot;UTC+1&quot;
+    for fmt in (&quot;%Y/%m/%d %I:%M:%S %p&quot;, &quot;%m/%d/%Y %I:%M:%S %p&quot;, &quot;%d/%m/%Y %I:%M:%S %p&quot;,
+                &quot;%Y-%m-%d %H:%M:%S&quot;, &quot;%Y/%m/%d %H:%M:%S&quot;, &quot;%d/%m/%Y %H:%M:%S&quot;,
+                &quot;%m/%d/%Y %H:%M:%S&quot;, &quot;%Y-%m-%d&quot;, &quot;%Y/%m/%d&quot;, &quot;%d/%m/%Y&quot;, &quot;%m/%d/%Y&quot;,
+                &quot;%Y-%m-%d %I:%M:%S %p&quot;):
+        try:
+            return datetime.strptime(s, fmt).date()
+        except ValueError:
+            continue
+    # last resort: take first 10 chars as ISO
+    try:
+        return datetime.strptime(s[:10], &quot;%Y-%m-%d&quot;).date()
+    except ValueError:
+        return None
+
+
+# ----------------------------------------------------------------------------
+# Ingestion
+# ----------------------------------------------------------------------------
+def _read_rows(path):
+    &quot;&quot;&quot;Read a CSV or an Excel (.xlsx) export of the form responses into a list of rows.&quot;&quot;&quot;
+    ext = os.path.splitext(path)[1].lower()
+    if ext in (&quot;.xlsx&quot;, &quot;.xlsm&quot;):
+        try:
+            from openpyxl import load_workbook
+        except ImportError as e:
+            raise ImportError(&quot;Reading Excel needs openpyxl: pip install openpyxl&quot;) from e
+        wb = load_workbook(path, read_only=True, data_only=True)
+        ws = wb.active
+        rows = []
+        for r in ws.iter_rows(values_only=True):
+            rows.append([&quot;&quot; if v is None else str(v) for v in r])
+        wb.close()
+        return rows
+    with open(path, newline=&quot;&quot;, encoding=&quot;utf-8-sig&quot;) as f:
+        return list(csv.reader(f))
+
+
+def load_records(path):
+    rows = _read_rows(path)
+    if not rows:
+        return []
+    header = rows[0]
+    cmap = _match_col(header)
+    required = [&quot;athlete&quot;, &quot;duration&quot;, &quot;intensity&quot;]
+    missing = [r for r in required if r not in cmap]
+    if missing:
+        raise ValueError(f&quot;Missing required columns: {missing}. Found: {list(cmap)}&quot;)
+    idx = {c: header.index(h) for c, h in cmap.items()}
+    recs = []
+    for r in rows[1:]:
+        if not any(cell.strip() for cell in r):
+            continue
+        def g(c):
+            return r[idx[c]] if c in idx and idx[c] &lt; len(r) else None
+        d = _parse_date(g(&quot;timestamp&quot;))
+        rec = {
+            &quot;date&quot;: d,
+            &quot;athlete&quot;: (g(&quot;athlete&quot;) or &quot;&quot;).strip(),
+            &quot;moment&quot;: (g(&quot;moment&quot;) or &quot;&quot;).strip(),
+            &quot;duration&quot;: _to_float(g(&quot;duration&quot;)),
+            &quot;intensity&quot;: _to_float(g(&quot;intensity&quot;)),
+            &quot;fatigue&quot;: _to_float(g(&quot;fatigue&quot;)),
+            &quot;stress&quot;: _to_float(g(&quot;stress&quot;)),
+            &quot;soreness&quot;: _to_float(g(&quot;soreness&quot;)),
+            &quot;sleep&quot;: _to_float(g(&quot;sleep&quot;)),
+            &quot;pain&quot;: _yesno(g(&quot;pain&quot;)),
+            &quot;pain_location&quot;: (g(&quot;pain_location&quot;) or &quot;&quot;).strip() or None,
+            &quot;ostrc_q1&quot;: _to_float(g(&quot;ostrc_q1&quot;)),
+            &quot;ostrc_q2&quot;: _to_float(g(&quot;ostrc_q2&quot;)),
+            &quot;ostrc_q3&quot;: _to_float(g(&quot;ostrc_q3&quot;)),
+            &quot;ostrc_q4&quot;: _to_float(g(&quot;ostrc_q4&quot;)),
+        }
+        if rec[&quot;athlete&quot;] and rec[&quot;duration&quot;] is not None and rec[&quot;intensity&quot;] is not None:
+            rec[&quot;session_load&quot;] = rec[&quot;duration&quot;] * rec[&quot;intensity&quot;]
+        else:
+            rec[&quot;session_load&quot;] = None
+        recs.append(rec)
+    return recs
+
+
+# ----------------------------------------------------------------------------
+# Per-athlete daily aggregation
+# ----------------------------------------------------------------------------
+def wellness_composite(rec):
+    &quot;&quot;&quot;Harmonise direction so higher = better. Range ~1..7. None if no items.
+    All four Hooper items are recorded 1=best..7=worst (sleep 1=very very good),
+    so every item is flipped (8 - x) to make the composite higher = better.&quot;&quot;&quot;
+    vals = []
+    for k in (&quot;sleep&quot;, &quot;fatigue&quot;, &quot;stress&quot;, &quot;soreness&quot;):
+        if rec[k] is not None:
+            vals.append(8 - rec[k])            # 1=best..7=worst -&gt; flip so higher = better
+    return round(sum(vals) / len(vals), 2) if vals else None
+
+
+def daily_series(recs, athlete):
+    &quot;&quot;&quot;Return {date: {&#x27;load&#x27;:, &#x27;wellness&#x27;:}} summing load, averaging wellness.&quot;&quot;&quot;
+    by_day = {}
+    for r in recs:
+        if r[&quot;athlete&quot;] != athlete or r[&quot;date&quot;] is None:
+            continue
+        d = by_day.setdefault(r[&quot;date&quot;], {&quot;loads&quot;: [], &quot;well&quot;: []})
+        if r[&quot;session_load&quot;] is not None:
+            d[&quot;loads&quot;].append(r[&quot;session_load&quot;])
+        w = wellness_composite(r)
+        if w is not None:
+            d[&quot;well&quot;].append(w)
+    out = {}
+    for d, v in by_day.items():
+        out[d] = {
+            &quot;load&quot;: sum(v[&quot;loads&quot;]) if v[&quot;loads&quot;] else 0.0,
+            &quot;wellness&quot;: round(sum(v[&quot;well&quot;]) / len(v[&quot;well&quot;]), 2) if v[&quot;well&quot;] else None,
+        }
+    return out
+
+
+def window_loads(series, end, days):
+    &quot;&quot;&quot;Daily loads across every calendar day in the window. Missing/rest days = 0,
+    as required for Foster monotony and strain and for ACWR baselines.&quot;&quot;&quot;
+    start = end - timedelta(days=days - 1)
+    out = []
+    d = start
+    while d &lt;= end:
+        out.append(series[d][&quot;load&quot;] if d in series else 0.0)
+        d += timedelta(days=1)
+    return out
+
+
+def compute_metrics(series, ref_date):
+    &quot;&quot;&quot;Compute the load/wellness indices for an athlete on ref_date.&quot;&quot;&quot;
+    if ref_date not in series:
+        return None
+    acute_window = window_loads(series, ref_date, ACUTE_DAYS)
+    # Uncoupled ACWR: chronic window excludes the current acute period to avoid
+    # mathematical coupling between numerator and denominator.
+    chronic_window = window_loads(series, ref_date - timedelta(days=ACUTE_DAYS), CHRONIC_DAYS)
+
+    daily_load = series[ref_date][&quot;load&quot;]
+    weekly_load = sum(acute_window)
+    acute_mean = (sum(acute_window) / len(acute_window)) if acute_window else 0.0
+    chronic_daily_mean = (sum(chronic_window) / len(chronic_window)) if chronic_window else 0.0
+
+    # Monotony / strain over the acute (7-day) window
+    if len(acute_window) &gt;= 2 and st.pstdev(acute_window) &gt; 0:
+        monotony = acute_mean / st.pstdev(acute_window)
+    else:
+        monotony = None
+    strain = weekly_load * monotony if monotony is not None else None
+
+    # ACWR (uncoupled): acute mean daily / chronic mean daily (acute excluded)
+    acwr = (acute_mean / chronic_daily_mean) if chronic_daily_mean &gt; 0 else None
+
+    # Acute spike: today vs 7-day mean (excluding today if possible)
+    prior = [l for d, l in [(d, series[d][&quot;load&quot;]) for d in series
+             if ref_date - timedelta(days=ACUTE_DAYS) &lt;= d &lt; ref_date]]
+    prior_mean = (sum(prior) / len(prior)) if prior else 0.0
+    acute_spike = (daily_load / prior_mean) if prior_mean &gt; 0 else None
+
+    # Wellness baseline z-score
+    wb = [series[d][&quot;wellness&quot;] for d in series
+          if ref_date - timedelta(days=WELLNESS_BASELINE_DAYS) &lt;= d &lt; ref_date
+          and series[d][&quot;wellness&quot;] is not None]
+    today_well = series[ref_date][&quot;wellness&quot;]
+    if today_well is not None and len(wb) &gt;= 3 and st.pstdev(wb) &gt; 0:
+        well_z = (today_well - (sum(wb) / len(wb))) / st.pstdev(wb)
+    else:
+        well_z = None
+
+    # Distinct days the athlete actually logged in the last 28 days, for a data-confidence tier.
+    days_logged = sum(1 for d in series
+                      if ref_date - timedelta(days=CHRONIC_DAYS) &lt; d &lt;= ref_date)
+    if days_logged &gt;= 14:
+        confidence = &quot;high&quot;
+    elif days_logged &gt;= 7:
+        confidence = &quot;moderate&quot;
+    else:
+        confidence = &quot;low&quot;
+
+    return {
+        &quot;daily_load&quot;: round(daily_load, 1),
+        &quot;weekly_load&quot;: round(weekly_load, 1),
+        &quot;monotony&quot;: round(monotony, 2) if monotony is not None else None,
+        &quot;strain&quot;: round(strain, 1) if strain is not None else None,
+        &quot;acwr&quot;: round(acwr, 2) if acwr is not None else None,
+        &quot;acute_spike&quot;: round(acute_spike, 2) if acute_spike is not None else None,
+        &quot;wellness&quot;: today_well,
+        &quot;wellness_z&quot;: round(well_z, 2) if well_z is not None else None,
+        &quot;days_of_data&quot;: len(chronic_window),
+        &quot;days_logged&quot;: days_logged,
+        &quot;confidence&quot;: confidence,
+    }
+
+
+# ----------------------------------------------------------------------------
+# Decision logic
+# ----------------------------------------------------------------------------
+def decide(m):
+    &quot;&quot;&quot;Return (decision, rationale_list). DECREASE / MAINTAIN / INCREASE.&quot;&quot;&quot;
+    reasons = []
+    red = []
+    green = []
+
+    if m[&quot;acwr&quot;] is not None:
+        if m[&quot;acwr&quot;] &gt; ACWR_HIGH:
+            red.append(f&quot;ACWR {m[&#x27;acwr&#x27;]} above the {ACWR_HIGH} threshold&quot;)
+        elif m[&quot;acwr&quot;] &lt; ACWR_LOW:
+            green.append(f&quot;ACWR {m[&#x27;acwr&#x27;]} below {ACWR_LOW}, room to load&quot;)
+
+    if m[&quot;wellness_z&quot;] is not None:
+        if m[&quot;wellness_z&quot;] &lt;= WELLNESS_DROP_Z:
+            red.append(f&quot;wellness {m[&#x27;wellness_z&#x27;]} SD below personal baseline&quot;)
+        elif m[&quot;wellness_z&quot;] &gt;= WELLNESS_GOOD_Z:
+            green.append(&quot;wellness at or above personal baseline&quot;)
+
+    if m[&quot;monotony&quot;] is not None and m[&quot;monotony&quot;] &gt;= MONOTONY_HIGH:
+        red.append(f&quot;high monotony ({m[&#x27;monotony&#x27;]}), low day-to-day variation&quot;)
+
+    if m[&quot;acute_spike&quot;] is not None and m[&quot;acute_spike&quot;] &gt;= ACUTE_SPIKE_RATIO:
+        red.append(f&quot;acute load spike ({m[&#x27;acute_spike&#x27;]}x recent mean)&quot;)
+
+    if m.get(&quot;confidence&quot;) == &quot;low&quot;:
+        reasons.append(f&quot;limited history ({m.get(&#x27;days_logged&#x27;, &#x27;?&#x27;)} days logged); interpret with caution&quot;)
+
+    if red:
+        decision = &quot;DECREASE&quot;
+        reasons = red + reasons
+    elif green and len(green) &gt;= 2:
+        decision = &quot;INCREASE&quot;
+        reasons = green + reasons
+    else:
+        decision = &quot;MAINTAIN&quot;
+        reasons = (green or [&quot;metrics within normal range&quot;]) + reasons
+    return decision, reasons
+
+
+def strategy(decision, m):
+    &quot;&quot;&quot;Map a decision and its dominant signal to one concrete coaching strategy.
+    Deterministic: same inputs always give the same suggestion. Advisory only.&quot;&quot;&quot;
+    low_wellness = m.get(&quot;wellness_z&quot;) is not None and m[&quot;wellness_z&quot;] &lt;= WELLNESS_DROP_Z
+    high_acwr = m.get(&quot;acwr&quot;) is not None and m[&quot;acwr&quot;] &gt; ACWR_HIGH
+    spike = m.get(&quot;acute_spike&quot;) is not None and m[&quot;acute_spike&quot;] &gt;= ACUTE_SPIKE_RATIO
+    monotonous = m.get(&quot;monotony&quot;) is not None and m[&quot;monotony&quot;] &gt;= MONOTONY_HIGH
+    if decision == &quot;DECREASE&quot;:
+        if low_wellness:
+            return (&quot;Recovery emphasis: cut total volume by about 30 percent, keep intensity light, &quot;
+                    &quot;protect sleep and add active recovery, then recheck wellness before the next session.&quot;)
+        if spike or high_acwr:
+            return (&quot;Deload the spike: reduce session volume by 20 to 30 percent and cap intensity, &quot;
+                    &quot;hold for one to two days until the workload ratio settles back toward the optimal band.&quot;)
+        if monotonous:
+            return (&quot;Break the monotony: vary the load across the week, insert one clearly easy and one harder day &quot;
+                    &quot;instead of repeating a uniform load.&quot;)
+        return &quot;Ease the next session: lower volume or intensity and reassess tomorrow.&quot;
+    if decision == &quot;INCREASE&quot;:
+        return (&quot;Progress within limits: add load gradually, keep the week-to-week ramp under about 10 percent, &quot;
+                &quot;and re-evaluate wellness before the next step up.&quot;)
+    return &quot;Hold the plan: keep the prescribed load and keep monitoring; no change indicated today.&quot;
+
+
+# ----------------------------------------------------------------------------
+# Reporting
+# ----------------------------------------------------------------------------
+BADGE = {&quot;INCREASE&quot;: &quot;#1a7f37&quot;, &quot;MAINTAIN&quot;: &quot;#9a6700&quot;, &quot;DECREASE&quot;: &quot;#b42318&quot;}
+
+
+def build_report(results, ref_date):
+    n = len(results)
+    counts = {&quot;INCREASE&quot;: 0, &quot;MAINTAIN&quot;: 0, &quot;DECREASE&quot;: 0}
+    for r in results:
+        counts[r[&quot;decision&quot;]] += 1
+    tomorrow = ref_date + timedelta(days=1)
+
+    rows_html = &quot;&quot;
+    for r in sorted(results, key=lambda x: [&quot;DECREASE&quot;, &quot;MAINTAIN&quot;, &quot;INCREASE&quot;].index(x[&quot;decision&quot;])):
+        m = r[&quot;metrics&quot;]
+        rows_html += f&quot;&quot;&quot;
+        &lt;tr&gt;
+          &lt;td&gt;&lt;b&gt;{r[&#x27;athlete&#x27;]}&lt;/b&gt;&lt;/td&gt;
+          &lt;td&gt;&lt;span style=&quot;background:{BADGE[r[&#x27;decision&#x27;]]};color:#fff;padding:2px 8px;border-radius:10px;font-size:12px&quot;&gt;{r[&#x27;decision&#x27;]}&lt;/span&gt;&lt;/td&gt;
+          &lt;td&gt;{m[&#x27;acwr&#x27;] if m[&#x27;acwr&#x27;] is not None else &#x27;-&#x27;}&lt;/td&gt;
+          &lt;td&gt;{m[&#x27;wellness&#x27;] if m[&#x27;wellness&#x27;] is not None else &#x27;-&#x27;} (z {m[&#x27;wellness_z&#x27;] if m[&#x27;wellness_z&#x27;] is not None else &#x27;-&#x27;})&lt;/td&gt;
+          &lt;td&gt;{m[&#x27;monotony&#x27;] if m[&#x27;monotony&#x27;] is not None else &#x27;-&#x27;}&lt;/td&gt;
+          &lt;td&gt;{m[&#x27;weekly_load&#x27;]}&lt;/td&gt;
+          &lt;td style=&quot;font-size:12px;color:#444&quot;&gt;{&#x27;; &#x27;.join(r[&#x27;reasons&#x27;])}&lt;/td&gt;
+        &lt;/tr&gt;&quot;&quot;&quot;
+
+    html = f&quot;&quot;&quot;&lt;!DOCTYPE html&gt;&lt;html&gt;&lt;body style=&quot;font-family:Arial,Helvetica,sans-serif;color:#1a1a1a;max-width:880px&quot;&gt;
+    &lt;h2 style=&quot;color:#1F3864;margin-bottom:2px&quot;&gt;HBOD daily report&lt;/h2&gt;
+    &lt;p style=&quot;color:#555;margin-top:0&quot;&gt;Data through {ref_date.isoformat()} &amp;middot; recommendation for {tomorrow.isoformat()}&lt;/p&gt;
+    &lt;p&gt;Athletes analysed: &lt;b&gt;{n}&lt;/b&gt; &amp;nbsp;|&amp;nbsp;
+       &lt;span style=&quot;color:{BADGE[&#x27;DECREASE&#x27;]}&quot;&gt;Decrease: {counts[&#x27;DECREASE&#x27;]}&lt;/span&gt; &amp;nbsp;
+       &lt;span style=&quot;color:{BADGE[&#x27;MAINTAIN&#x27;]}&quot;&gt;Maintain: {counts[&#x27;MAINTAIN&#x27;]}&lt;/span&gt; &amp;nbsp;
+       &lt;span style=&quot;color:{BADGE[&#x27;INCREASE&#x27;]}&quot;&gt;Increase: {counts[&#x27;INCREASE&#x27;]}&lt;/span&gt;&lt;/p&gt;
+    &lt;table cellspacing=&quot;0&quot; cellpadding=&quot;6&quot; style=&quot;border-collapse:collapse;width:100%;font-size:13px&quot;&gt;
+      &lt;tr style=&quot;background:#DDEBF7;text-align:left&quot;&gt;
+        &lt;th&gt;Athlete&lt;/th&gt;&lt;th&gt;Tomorrow&lt;/th&gt;&lt;th&gt;ACWR&lt;/th&gt;&lt;th&gt;Wellness&lt;/th&gt;&lt;th&gt;Monotony&lt;/th&gt;&lt;th&gt;Weekly load (AU)&lt;/th&gt;&lt;th&gt;Why&lt;/th&gt;
+      &lt;/tr&gt;{rows_html}
+    &lt;/table&gt;
+    &lt;p style=&quot;font-size:12px;color:#777;margin-top:14px&quot;&gt;
+      Recommendations are decision support, not verdicts. ACWR and related indices flag patterns for the coach to judge.
+      Increase = room to progress load. Decrease = ease tomorrow. Maintain = hold the plan.
+    Generated automatically by HBOD.&lt;/p&gt;
+    &lt;/body&gt;&lt;/html&gt;&quot;&quot;&quot;
+
+    # plain text
+    lines = [f&quot;HBOD daily report - data through {ref_date.isoformat()}&quot;,
+             f&quot;Recommendation for {tomorrow.isoformat()}&quot;,
+             f&quot;Decrease {counts[&#x27;DECREASE&#x27;]} | Maintain {counts[&#x27;MAINTAIN&#x27;]} | Increase {counts[&#x27;INCREASE&#x27;]}&quot;, &quot;&quot;]
+    for r in sorted(results, key=lambda x: [&quot;DECREASE&quot;, &quot;MAINTAIN&quot;, &quot;INCREASE&quot;].index(x[&quot;decision&quot;])):
+        m = r[&quot;metrics&quot;]
+        lines.append(f&quot;{r[&#x27;athlete&#x27;]}: {r[&#x27;decision&#x27;]} | ACWR {m[&#x27;acwr&#x27;]} | wellness {m[&#x27;wellness&#x27;]} &quot;
+                     f&quot;(z {m[&#x27;wellness_z&#x27;]}) | monotony {m[&#x27;monotony&#x27;]} | weekly {m[&#x27;weekly_load&#x27;]} AU&quot;)
+        lines.append(f&quot;    reason: {&#x27;; &#x27;.join(r[&#x27;reasons&#x27;])}&quot;)
+    text = &quot;\n&quot;.join(lines)
+    return html, text
+
+
+def append_audit(log_path, results, ref_date):
+    new = not os.path.exists(log_path)
+    with open(log_path, &quot;a&quot;, newline=&quot;&quot;, encoding=&quot;utf-8&quot;) as f:
+        w = csv.writer(f)
+        if new:
+            w.writerow([&quot;generated_at&quot;, &quot;data_through&quot;, &quot;recommend_for&quot;, &quot;athlete&quot;,
+                        &quot;decision&quot;, &quot;acwr&quot;, &quot;wellness&quot;, &quot;wellness_z&quot;, &quot;monotony&quot;,
+                        &quot;strain&quot;, &quot;weekly_load&quot;, &quot;daily_load&quot;, &quot;reasons&quot;])
+        gen = datetime.now().isoformat(timespec=&quot;seconds&quot;)
+        rec_for = (ref_date + timedelta(days=1)).isoformat()
+        for r in results:
+            m = r[&quot;metrics&quot;]
+            w.writerow([gen, ref_date.isoformat(), rec_for, r[&quot;athlete&quot;], r[&quot;decision&quot;],
+                        m[&quot;acwr&quot;], m[&quot;wellness&quot;], m[&quot;wellness_z&quot;], m[&quot;monotony&quot;],
+                        m[&quot;strain&quot;], m[&quot;weekly_load&quot;], m[&quot;daily_load&quot;],
+                        &quot; | &quot;.join(r[&quot;reasons&quot;])])
+
+
+# ----------------------------------------------------------------------------
+# Wellness analytics: sleep, soreness, fatigue (Hooper), alongside load
+# ----------------------------------------------------------------------------
+def component_daily(recs, athlete):
+    &quot;&quot;&quot;Per-day mean of each Hooper item for one athlete.&quot;&quot;&quot;
+    by = {}
+    for r in recs:
+        if r[&quot;athlete&quot;] != athlete or r[&quot;date&quot;] is None:
+            continue
+        d = by.setdefault(r[&quot;date&quot;], {&quot;sleep&quot;: [], &quot;fatigue&quot;: [], &quot;stress&quot;: [], &quot;soreness&quot;: []})
+        for k in (&quot;sleep&quot;, &quot;fatigue&quot;, &quot;stress&quot;, &quot;soreness&quot;):
+            if r[k] is not None:
+                d[k].append(r[k])
+    return {d: {k: (round(sum(v[k]) / len(v[k]), 1) if v[k] else None) for k in v} for d, v in by.items()}
+
+
+def _recent(comp, end, days, key):
+    start = end - timedelta(days=days - 1)
+    return [c[key] for day, c in comp.items() if start &lt;= day &lt;= end and c.get(key) is not None]
+
+
+def wellness_flags(comp, ref):
+    &quot;&quot;&quot;Plain-language flags from the Hooper items, so wellness, not only load, drives the call.&quot;&quot;&quot;
+    flags = []
+    today = comp.get(ref, {})
+    sl = _recent(comp, ref, 7, &quot;sleep&quot;)   # sleep 1=very good .. 7=very poor
+    if today.get(&quot;sleep&quot;) is not None and today[&quot;sleep&quot;] &gt;= 5:
+        flags.append(f&quot;poor sleep last night ({today[&#x27;sleep&#x27;]}/7)&quot;)
+    elif sl and sum(sl) / len(sl) &gt;= 4.5:
+        flags.append(&quot;poor sleep across the week&quot;)
+    if today.get(&quot;fatigue&quot;) is not None and today[&quot;fatigue&quot;] &gt;= 6:
+        flags.append(f&quot;high fatigue ({today[&#x27;fatigue&#x27;]}/7)&quot;)
+    if today.get(&quot;stress&quot;) is not None and today[&quot;stress&quot;] &gt;= 6:
+        flags.append(f&quot;high stress ({today[&#x27;stress&#x27;]}/7)&quot;)
+    return flags
+
+
+# ----------------------------------------------------------------------------
+# Targeted help for the coach: each wellness flag maps to a concrete, evidence-based
+# behavioural suggestion. Advisory only; anything clinical goes to the medical staff.
+# ----------------------------------------------------------------------------
+SLEEP_TIP = (&quot;poor sleep: prioritise sleep hygiene, limit bright and blue-light screens for about two hours &quot;
+             &quot;before bed, keep a consistent bedtime and a dark, cool, quiet room, and protect the sleep window &quot;
+             &quot;around travel and evening matches; any sleep aid or melatonin only on qualified medical advice&quot;)
+STRESS_TIP = (&quot;high stress: check school, home, and competition pressures, lighten non-training demands where &quot;
+              &quot;possible, and consider psychological support&quot;)
+FATIGUE_TIP = (&quot;high fatigue: favour a recovery day, extend the sleep opportunity, and reassess wellness before &quot;
+               &quot;loading again&quot;)
+
+
+def wellness_advice(reasons):
+    &quot;&quot;&quot;Turn wellness flags into concrete coach guidance. Returns a list of tips.&quot;&quot;&quot;
+    tips = []
+    joined = &quot; &quot;.join(reasons).lower()
+    if &quot;poor sleep&quot; in joined:
+        tips.append(SLEEP_TIP)
+    if &quot;high stress&quot; in joined:
+        tips.append(STRESS_TIP)
+    if &quot;high fatigue&quot; in joined:
+        tips.append(FATIGUE_TIP)
+    return tips
+
+
+def soreness_reason(comp, series, ref):
+    &quot;&quot;&quot;Explain muscle soreness: a recent load spike points to DOMS; persistence points to a niggle.&quot;&quot;&quot;
+    today = comp.get(ref, {})
+    if today.get(&quot;soreness&quot;) is None or today[&quot;soreness&quot;] &lt; 5:
+        return None
+    prior = [series[d][&quot;load&quot;] for d in series if ref - timedelta(days=7) &lt;= d &lt; ref]
+    pm = (sum(prior) / len(prior)) if prior else 0.0
+    tl = series.get(ref, {}).get(&quot;load&quot;, 0.0)
+    if pm &gt; 0 and tl &gt;= 1.3 * pm:
+        return f&quot;soreness likely from a recent load spike (DOMS), ease tomorrow ({today[&#x27;soreness&#x27;]}/7)&quot;
+    days_high = sum(1 for d in series if ref - timedelta(days=3) &lt;= d &lt;= ref and comp.get(d, {}).get(&quot;soreness&quot;, 0) &gt;= 5)
+    if days_high &gt;= 3:
+        return f&quot;soreness persistent over several days, check for a niggle ({today[&#x27;soreness&#x27;]}/7)&quot;
+    return f&quot;soreness elevated, monitor ({today[&#x27;soreness&#x27;]}/7)&quot;
+
+
+# ----------------------------------------------------------------------------
+# Health / injury module: daily pain gate + weekly OSTRC-H severity
+#   OSTRC severity scored 0..100 following the OSTRC method (Clarsen 2014;
+#   per-option scoring 0/8/17/25 to be confirmed against Clarsen 2013 before print).
+# ----------------------------------------------------------------------------
+def health_status(recs, athlete, ref_date):
+    &quot;&quot;&quot;Return the athlete&#x27;s health signal on ref_date:
+    the daily pain flag and location, and the most recent weekly OSTRC-H severity.
+    A substantial problem follows Clarsen: a moderate or worse reduction in
+    participation, training volume, or performance (any OSTRC item &gt;= 17).&quot;&quot;&quot;
+    mine = [r for r in recs if r[&quot;athlete&quot;] == athlete and r[&quot;date&quot;] is not None]
+    today = [r for r in mine if r[&quot;date&quot;] == ref_date]
+    pain = any(r.get(&quot;pain&quot;) is True for r in today)
+    location = next((r.get(&quot;pain_location&quot;) for r in today
+                     if r.get(&quot;pain&quot;) is True and r.get(&quot;pain_location&quot;)), None)
+    # most recent OSTRC within the last 7 days (weekly instrument)
+    ost = [r for r in mine
+           if ref_date - timedelta(days=7) &lt;= r[&quot;date&quot;] &lt;= ref_date
+           and any(r.get(f&quot;ostrc_q{i}&quot;) is not None for i in (1, 2, 3, 4))]
+    ost.sort(key=lambda r: r[&quot;date&quot;])
+    severity = None; substantial = False; cannot = False
+    if ost:
+        r = ost[-1]
+        qs = [r.get(f&quot;ostrc_q{i}&quot;) or 0 for i in (1, 2, 3, 4)]
+        severity = round(sum(qs), 0)
+        substantial = any(q &gt;= 17 for q in qs[:3])   # participation, volume, performance
+        cannot = any(q &gt;= 25 for q in qs[:3])
+    return {&quot;pain&quot;: pain, &quot;location&quot;: location, &quot;severity&quot;: severity,
+            &quot;substantial&quot;: substantial, &quot;cannot&quot;: cannot,
+            &quot;flagged&quot;: bool(pain or substantial or (severity or 0) &gt; 0)}
+
+
+def apply_health_override(decision, strat, reasons, hs):
+    &quot;&quot;&quot;Health sits above load and wellness, in three graded tiers. The tool never
+    advises loading an athlete who flagged a health problem.&quot;&quot;&quot;
+    loc = f&quot; ({hs[&#x27;location&#x27;]})&quot; if hs[&quot;location&quot;] else &quot;&quot;
+    sev = f&quot;, OSTRC severity {int(hs[&#x27;severity&#x27;])}&quot; if hs[&quot;severity&quot;] is not None else &quot;&quot;
+    hs[&quot;action&quot;] = None
+    if hs[&quot;cannot&quot;]:                                     # OSTRC &#x27;could not participate&#x27;
+        hs[&quot;action&quot;] = &quot;STOP&quot;
+        reasons = [f&quot;could not participate{loc}{sev}: STOP, do not train, urgent medical assessment&quot;] + reasons
+        return &quot;DECREASE&quot;, (&quot;Immediate stop: no training today; arrange an urgent medical assessment &quot;
+                            &quot;before any return to load.&quot;), reasons
+    if hs[&quot;substantial&quot;]:                                # moderate or worse reduction
+        hs[&quot;action&quot;] = &quot;REFER&quot;
+        reasons = [f&quot;substantial health problem{loc}{sev}: reduce load and refer to medical staff&quot;] + reasons
+        return &quot;DECREASE&quot;, (&quot;Reduce and refer: cut load and refer the athlete to the medical staff; &quot;
+                            &quot;do not progress until the problem resolves.&quot;), reasons
+    if hs[&quot;flagged&quot;]:                                    # a flag or a minor niggle
+        hs[&quot;action&quot;] = &quot;HOLD&quot;
+        reasons = [f&quot;health flag today{loc}: hold, do not increase, monitor&quot;] + reasons
+        if decision == &quot;INCREASE&quot;:
+            return &quot;MAINTAIN&quot;, (&quot;Hold, not increase: an athlete-reported health problem is present; &quot;
+                                &quot;keep the load and monitor.&quot;), reasons
+    return decision, strat, reasons
+
+
+# ----------------------------------------------------------------------------
+# Extended variables derived from the same inputs
+#   EWMA ACWR (Williams 2017), weekly load ramp (Gabbett 2016),
+#   training stress balance, Hooper total, sleep index, readiness score
+# ----------------------------------------------------------------------------
+def ewma_acwr(series, ref, lookback=42, acute_span=7, chronic_span=28):
+    days = [ref - timedelta(days=i) for i in range(lookback - 1, -1, -1)]
+    loads = [series[d][&quot;load&quot;] if d in series else 0.0 for d in days]
+    a, cch = 2.0 / (acute_span + 1), 2.0 / (chronic_span + 1)
+    ea = ec = None
+    for L in loads:
+        ea = L if ea is None else a * L + (1 - a) * ea
+        ec = L if ec is None else cch * L + (1 - cch) * ec
+    return round(ea / ec, 2) if ec and ec &gt; 0 else None
+
+
+def weekly_ramp(series, ref):
+    this = sum(window_loads(series, ref, 7))
+    last = sum(window_loads(series, ref - timedelta(days=7), 7))
+    return round((this - last) / last * 100.0, 1) if last &gt; 0 else None
+
+
+def training_stress_balance(series, ref):
+    acute = window_loads(series, ref, 7); chronic = window_loads(series, ref, 28)
+    am = sum(acute) / len(acute) if acute else 0.0
+    cm = sum(chronic) / len(chronic) if chronic else 0.0
+    return round(cm - am, 1)   # positive = freshening, negative = fatiguing
+
+
+def hooper_total(comp, ref):
+    t = comp.get(ref, {})
+    parts = []
+    if t.get(&quot;fatigue&quot;) is not None: parts.append(t[&quot;fatigue&quot;])
+    if t.get(&quot;stress&quot;) is not None: parts.append(t[&quot;stress&quot;])
+    if t.get(&quot;soreness&quot;) is not None: parts.append(t[&quot;soreness&quot;])
+    if t.get(&quot;sleep&quot;) is not None: parts.append(t[&quot;sleep&quot;])       # sleep already 1=best..7=worst
+    return round(sum(parts), 1) if parts else None                # range 4..28, higher = worse
+
+
+def sleep_index(comp, ref):
+    today = comp.get(ref, {}).get(&quot;sleep&quot;)
+    week = _recent(comp, ref, 7, &quot;sleep&quot;)
+    mean = round(sum(week) / len(week), 1) if week else None
+    debt = bool(mean is not None and mean &gt;= 4.5)   # sleep 1=very good..7=very poor
+    return {&quot;today&quot;: today, &quot;week_mean&quot;: mean, &quot;debt&quot;: debt}
+
+
+def readiness_score(m):
+    &quot;&quot;&quot;0-100 readiness, blending wellness vs baseline with the workload ratio. Documented heuristic.&quot;&quot;&quot;
+    s = 60.0
+    if m.get(&quot;wellness_z&quot;) is not None:
+        s += 12.0 * max(-2.0, min(2.0, m[&quot;wellness_z&quot;]))
+    if m.get(&quot;acwr&quot;) is not None:
+        if m[&quot;acwr&quot;] &gt; 1.3: s -= 18.0 * (m[&quot;acwr&quot;] - 1.3)
+        if m[&quot;acwr&quot;] &lt; 0.8: s -= 10.0 * (0.8 - m[&quot;acwr&quot;])
+    if m.get(&quot;monotony&quot;) is not None and m[&quot;monotony&quot;] &gt;= 2.0:
+        s -= 8.0
+    return round(max(0.0, min(100.0, s)), 0)
+
+
+def extended_metrics(series, comp, ref, m):
+    si = sleep_index(comp, ref)
+    return {
+        &quot;ewma_acwr&quot;: ewma_acwr(series, ref),
+        &quot;weekly_ramp_pct&quot;: weekly_ramp(series, ref),
+        &quot;tsb&quot;: training_stress_balance(series, ref),
+        &quot;hooper_total&quot;: hooper_total(comp, ref),
+        &quot;sleep_today&quot;: si[&quot;today&quot;], &quot;sleep_week_mean&quot;: si[&quot;week_mean&quot;], &quot;sleep_debt&quot;: si[&quot;debt&quot;],
+        &quot;readiness&quot;: readiness_score(m),
+    }
+
+
+# ----------------------------------------------------------------------------
+# Reporting cadence: daily 20:00, weekly (Saturday), monthly, quarterly
+# ----------------------------------------------------------------------------
+def reports_due(ref):
+    &quot;&quot;&quot;Which reports the agent issues on this date. Daily always; weekly on Saturday;
+    monthly on the last Saturday of the month; quarterly on the last Saturday of Mar/Jun/Sep/Dec.&quot;&quot;&quot;
+    due = [&quot;daily&quot;]
+    if ref.weekday() == 5:  # Saturday
+        due.append(&quot;weekly&quot;)
+        if (ref + timedelta(days=7)).month != ref.month:  # last Saturday of the month
+            due.append(&quot;monthly&quot;)
+            if ref.month in (3, 6, 9, 12):
+                due.append(&quot;quarterly&quot;)
+    return due
+
+
+def _period_table(recs, athletes, ref, days):
+    rows = []
+    for a in athletes:
+        series = daily_series(recs, a)
+        comp = component_daily(recs, a)
+        win = [series[d][&quot;load&quot;] for d in series if ref - timedelta(days=days - 1) &lt;= d &lt;= ref]
+        total = round(sum(win), 0)
+        sl = _recent(comp, ref, days, &quot;sleep&quot;); fa = _recent(comp, ref, days, &quot;fatigue&quot;)
+        half = days // 2
+        first = [series[d][&quot;load&quot;] for d in series if ref - timedelta(days=days - 1) &lt;= d &lt;= ref - timedelta(days=half)]
+        second = [series[d][&quot;load&quot;] for d in series if ref - timedelta(days=half - 1) &lt;= d &lt;= ref]
+        trend = &quot;up&quot; if sum(second) &gt; sum(first) * 1.1 else &quot;down&quot; if sum(second) &lt; sum(first) * 0.9 else &quot;stable&quot;
+        rows.append((a, total, round(sum(sl) / len(sl), 1) if sl else &quot;-&quot;, round(sum(fa) / len(fa), 1) if fa else &quot;-&quot;, trend))
+    return rows
+
+
+def build_periodic(recs, athletes, ref, due):
+    html_parts, text_parts = [], []
+    for tag, days, title in ((&quot;weekly&quot;, 7, &quot;Weekly review (last 7 days)&quot;),
+                             (&quot;monthly&quot;, 28, &quot;Monthly review (last 28 days)&quot;)):
+        if tag in due:
+            rows = _period_table(recs, athletes, ref, days)
+            t = [f&quot;\n=== {title} ===&quot;] + [f&quot;{a}: load {tot} AU | sleep {sl}/7 | fatigue {fa}/7 | trend {tr}&quot;
+                                          for a, tot, sl, fa, tr in rows]
+            text_parts.append(&quot;\n&quot;.join(t))
+            tr_rows = &quot;&quot;.join(f&quot;&lt;tr&gt;&lt;td&gt;{a}&lt;/td&gt;&lt;td&gt;{tot}&lt;/td&gt;&lt;td&gt;{sl}&lt;/td&gt;&lt;td&gt;{fa}&lt;/td&gt;&lt;td&gt;{tr}&lt;/td&gt;&lt;/tr&gt;&quot;
+                              for a, tot, sl, fa, tr in rows)
+            html_parts.append(f&#x27;&lt;h3 style=&quot;color:#1F3864&quot;&gt;{title}&lt;/h3&gt;&lt;table cellpadding=&quot;5&quot; style=&quot;border-collapse:collapse;font-size:13px&quot;&gt;&#x27;
+                              f&#x27;&lt;tr style=&quot;background:#DDEBF7&quot;&gt;&lt;th&gt;Athlete&lt;/th&gt;&lt;th&gt;Load (AU)&lt;/th&gt;&lt;th&gt;Sleep&lt;/th&gt;&lt;th&gt;Fatigue&lt;/th&gt;&lt;th&gt;Trend&lt;/th&gt;&lt;/tr&gt;{tr_rows}&lt;/table&gt;&#x27;)
+    if &quot;quarterly&quot; in due:
+        rows = _period_table(recs, athletes, ref, 90)
+        lines = [&quot;\n=== Quarterly review and next-mesocycle draft (last 90 days) ===&quot;]
+        hrows = &quot;&quot;
+        for a, tot, sl, fa, tr in rows:
+            if tr == &quot;up&quot;:
+                meso = &quot;consider a recovery or deload block next&quot;
+            elif tr == &quot;down&quot; and (fa == &quot;-&quot; or (isinstance(fa, float) and fa &lt;= 4)):
+                meso = &quot;room for a build block next&quot;
+            else:
+                meso = &quot;hold the current block&quot;
+            lines.append(f&quot;{a}: 90-day load {tot} AU | trend {tr} | {meso}&quot;)
+            hrows += f&quot;&lt;tr&gt;&lt;td&gt;{a}&lt;/td&gt;&lt;td&gt;{tot}&lt;/td&gt;&lt;td&gt;{tr}&lt;/td&gt;&lt;td&gt;{meso}&lt;/td&gt;&lt;/tr&gt;&quot;
+        text_parts.append(&quot;\n&quot;.join(lines))
+        html_parts.append(&#x27;&lt;h3 style=&quot;color:#1F3864&quot;&gt;Quarterly review and next-mesocycle draft (last 90 days)&lt;/h3&gt;&#x27;
+                          &#x27;&lt;table cellpadding=&quot;5&quot; style=&quot;border-collapse:collapse;font-size:13px&quot;&gt;&#x27;
+                          &#x27;&lt;tr style=&quot;background:#DDEBF7&quot;&gt;&lt;th&gt;Athlete&lt;/th&gt;&lt;th&gt;90-day load&lt;/th&gt;&lt;th&gt;Trend&lt;/th&gt;&lt;th&gt;Mesocycle suggestion&lt;/th&gt;&lt;/tr&gt;&#x27;
+                          f&#x27;{hrows}&lt;/table&gt;&#x27;)
+    return (&quot;&quot;.join(html_parts), &quot;\n&quot;.join(text_parts))
+
+
+# ----------------------------------------------------------------------------
+# Orchestration
+# ----------------------------------------------------------------------------
+def run(input_csv, ref_date=None, out_html=None, audit_log=None, mode=&quot;auto&quot;):
+    recs = load_records(input_csv)
+    dates = [r[&quot;date&quot;] for r in recs if r[&quot;date&quot;]]
+    if ref_date is None:
+        ref_date = max(dates) if dates else date.today()
+    athletes = sorted({r[&quot;athlete&quot;] for r in recs if r[&quot;athlete&quot;]})
+    results = []
+    for a in athletes:
+        series = daily_series(recs, a)
+        if ref_date not in series:
+            continue  # no entry for the reference day
+        m = compute_metrics(series, ref_date)
+        if m is None:
+            continue
+        decision, reasons = decide(m)
+        comp = component_daily(recs, a)
+        reasons = reasons + wellness_flags(comp, ref_date)
+        sr = soreness_reason(comp, series, ref_date)
+        if sr:
+            reasons.append(sr)
+        ext = extended_metrics(series, comp, ref_date, m)
+        strat = strategy(decision, m)
+        hs = health_status(recs, a, ref_date)
+        decision, strat, reasons = apply_health_override(decision, strat, reasons, hs)
+        advice = wellness_advice(reasons)
+        results.append({&quot;athlete&quot;: a, &quot;metrics&quot;: m, &quot;decision&quot;: decision, &quot;reasons&quot;: reasons,
+                        &quot;strategy&quot;: strat, &quot;advice&quot;: advice, &quot;health&quot;: hs, &quot;ext&quot;: ext})
+    html, text = build_report(results, ref_date)
+    due = reports_due(ref_date) if mode == &quot;auto&quot; else ([&quot;daily&quot;] if mode == &quot;daily&quot; else [&quot;daily&quot;, mode])
+    extra_html, extra_text = build_periodic(recs, athletes, ref_date, due)
+    html = html.replace(&quot;&lt;/body&gt;&quot;, extra_html + &quot;&lt;/body&gt;&quot;) if &quot;&lt;/body&gt;&quot; in html else html + extra_html
+    text = text + (&quot;\n&quot; + extra_text if extra_text else &quot;&quot;)
+    text += &quot;\n\nReports issued: &quot; + &quot;, &quot;.join(due)
+    if out_html:
+        with open(out_html, &quot;w&quot;, encoding=&quot;utf-8&quot;) as f:
+            f.write(html)
+    if audit_log:
+        append_audit(audit_log, results, ref_date)
+    return results, html, text
+
+
+def main():
+    ap = argparse.ArgumentParser(description=&quot;HBOD training-load monitoring agent&quot;)
+    ap.add_argument(&quot;--input&quot;, required=True, help=&quot;responses CSV exported from the form sheet&quot;)
+    ap.add_argument(&quot;--date&quot;, help=&quot;reference day YYYY-MM-DD (default: latest in data)&quot;)
+    ap.add_argument(&quot;--out&quot;, default=&quot;hbd_report.html&quot;, help=&quot;HTML report path&quot;)
+    ap.add_argument(&quot;--log&quot;, default=&quot;hbd_audit.csv&quot;, help=&quot;audit log CSV path&quot;)
+    ap.add_argument(&quot;--mode&quot;, default=&quot;auto&quot;, choices=[&quot;auto&quot;, &quot;daily&quot;, &quot;weekly&quot;, &quot;monthly&quot;, &quot;quarterly&quot;],
+                    help=&quot;auto issues daily plus any due weekly/monthly/quarterly report&quot;)
+    args = ap.parse_args()
+    ref = _parse_date(args.date) if args.date else None
+    results, html, text = run(args.input, ref, args.out, args.log, args.mode)
+    print(text)
+    print(f&quot;\nHTML report: {args.out}\nAudit log: {args.log}&quot;)
+
+
+if __name__ == &quot;__main__&quot;:
+    main()
+</pre></body></html>

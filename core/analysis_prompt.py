@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-HBD — S3: generative-AI analysis prompt and data-block builder.
+HBOD — S3: generative-AI analysis prompt and data-block builder.
 
 The deterministic core (hbd_agent.py) computes every metric, decision, health
 tier and rationale. This module turns that computed output into a constrained
 prompt so a language model can produce a plain-language narrative for the coach.
 
-Design rule (from the HBD article): a constrained language model rephrases the
+Design rule (from the HBOD article): a constrained language model rephrases the
 result under guardrails and never changes a number. Nothing here computes a
 metric — it only formats the engine's output and, optionally, sends it to a
 model for rephrasing.
@@ -36,7 +36,7 @@ import hbd_agent as core  # noqa: E402
 # The constrained analysis prompt (S3). Kept in sync with S3_analysis_prompt.md.
 # ----------------------------------------------------------------------------
 ANALYSIS_PROMPT = """\
-You are a sports-science writing assistant for the HBD (Hooper–Borg–Dergaa)
+You are a sports-science writing assistant for the HBOD (Hooper–Borg–Oslo-Dergaa)
 daily training-load and wellness monitor. A deterministic engine has ALREADY
 computed every metric, the next-day training decision, the health tier and the
 full rationale for each athlete. Your ONLY job is to turn that computed output
@@ -85,7 +85,7 @@ def _athlete_block(r):
         + (f" (location {hs['location']})" if hs.get("location") else "")
         + (f", OSTRC severity {int(hs['severity'])}/100"
            if hs.get("severity") is not None else ""),
-        f"  ACWR: {_fmt(m.get('acwr'))} (band 0.80-1.30, red >=1.50)"
+        f"  ACWR: {_fmt(m.get('acwr'))} (band 0.80-1.30, threshold >1.30)"
         f" | acute spike: {_fmt(m.get('acute_spike'))}x recent mean",
         f"  Wellness composite: {_fmt(m.get('wellness'))}/7"
         f" (z {_fmt(m.get('wellness_z'))} vs 28-day personal baseline)",
@@ -120,7 +120,7 @@ def build_data_block(results, ref_date):
         if r["health"].get("action"):
             flags += 1
     header = (
-        f"HBD computed output — data through {ref_date.isoformat()}, "
+        f"HBOD computed output — data through {ref_date.isoformat()}, "
         f"recommendation for {(ref_date + timedelta(days=1)).isoformat()}.\n"
         f"Squad: {len(results)} athletes | "
         f"DECREASE {counts['DECREASE']} · MAINTAIN {counts['MAINTAIN']} · "
@@ -174,7 +174,7 @@ def render_with_claude(input_csv, ref_date=None, athlete=None,
 
 def main():
     ap = argparse.ArgumentParser(
-        description="HBD S3 — build the analysis prompt (and optionally run it)")
+        description="HBOD S3 — build the analysis prompt (and optionally run it)")
     ap.add_argument("--input", required=True, help="responses CSV/XLSX")
     ap.add_argument("--date", help="reference day YYYY-MM-DD (default: latest)")
     ap.add_argument("--athlete", help="restrict to one athlete by name")

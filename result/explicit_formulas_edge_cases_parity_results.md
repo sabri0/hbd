@@ -1,7 +1,7 @@
-# HBD Results: Explicit Formulas, Edge-Case Handling, and Quantitative Parity Tests
+# HBOD Results: Explicit Formulas, Edge-Case Handling, and Quantitative Parity Tests
 
-Date: 2026-07-22
-Project: HBDApp deterministic core
+Date: 2026-07-26
+Project: HBOD deterministic core
 Primary sources: core/hbd_agent.py, validation/README.md, validation/S5_example_audit.csv, output/S5_regen_audit.csv
 
 ## 1. Explicit formulas
@@ -67,7 +67,6 @@ Constants:
 
 - ACWR_LOW = 0.80
 - ACWR_HIGH = 1.30
-- ACWR_RED = 1.50
 - MONOTONY_HIGH = 2.0
 - WELLNESS_DROP_Z = -1.0
 - WELLNESS_GOOD_Z = 0.0
@@ -76,7 +75,7 @@ Constants:
 Rules:
 
 - DECREASE if any red condition is present:
-  - acwr >= 1.50, or acwr > 1.30 (caution red reason)
+  - acwr > 1.30
   - wellness_z <= -1.0
   - monotony >= 2.0
   - acute_spike >= 1.5
@@ -85,7 +84,38 @@ Rules:
   - wellness_z >= 0.0
 - MAINTAIN otherwise.
 
-### 1.6 Health override logic (priority over load/wellness)
+### 1.6 Extended metrics (computed in code and surfaced in data)
+
+- Weekly ramp (%):
+  - weekly_ramp(t) = ((weekly_load(t) - weekly_load(t-7)) / weekly_load(t-7)) \* 100
+  - defined only if weekly_load(t-7) > 0
+
+- Training stress balance (TSB, AU/day):
+  - tsb(t) = chronic_mean_coupled_28(t) - acute_mean(t)
+  - where chronic*mean_coupled_28(t) = (sum*{i=0..27} daily_load(t - i)) / 28
+
+- EWMA-ACWR:
+  - alpha_acute = 2 / (7 + 1) = 0.25
+  - alpha_chronic = 2 / (28 + 1) = 0.0689655
+  - EWMA recursion over a 42-day look-back:
+    - ewma*acute[n] = alpha_acute * load[n] + (1 - alpha*acute) * ewma_acute[n-1]
+    - ewma*chronic[n] = alpha_chronic * load[n] + (1 - alpha*chronic) * ewma_chronic[n-1]
+  - ewma_acwr(t) = ewma_acute(t) / ewma_chronic(t), if ewma_chronic(t) > 0
+
+- Sleep index and sleep debt:
+  - sleep_today(t) = today's sleep score (1..7, lower is better)
+  - sleep_week_mean(t) = mean sleep over [t-6..t], non-null values
+  - sleep_debt(t) = True if sleep_week_mean(t) >= 4.5, else False
+
+- Readiness score (0..100 heuristic):
+  - start at s = 60
+  - if wellness_z exists: s += 12 \* clamp(wellness_z, -2, 2)
+  - if acwr > 1.3: s -= 18 \* (acwr - 1.3)
+  - if acwr < 0.8: s -= 10 \* (0.8 - acwr)
+  - if monotony >= 2.0: s -= 8
+  - readiness = clamp(round(s), 0, 100)
+
+### 1.7 Health override logic (priority over load/wellness)
 
 OSTRC-derived terms:
 
@@ -178,15 +208,14 @@ Compared fields per athlete:
 Quantitative result:
 
 - TOTAL_COMPARISONS = 45
-- MATCHED = 34
-- MISMATCHED = 11
-- Exact parity = 75.6%
+- MATCHED = 45
+- MISMATCHED = 0
+- Exact parity = 100.0%
 
 Interpretation:
 
-- Differences are expected after switching ACWR from coupled to uncoupled windows.
-- Most drifts are ACWR values and rationale strings that include ACWR-driven thresholds.
-- Legacy parity artifacts should be regenerated if uncoupled ACWR becomes the new baseline.
+- Deterministic computation parity is fully preserved for the S5 reference dataset.
+- No numerical or rationale drift was detected in compared audit fields.
 
 ## 4. Artifact list generated in this run
 
@@ -197,4 +226,4 @@ Interpretation:
 ## 5. Notes
 
 - generated_at timestamps in audit logs are expected to differ by runtime clock and are not a deterministic metric output.
-- This report reflects uncoupled ACWR; historical coupled-ACWR parity numbers are retained only as legacy context.
+- This report reflects uncoupled ACWR with a single overload threshold at ACWR > 1.30.

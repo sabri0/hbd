@@ -1,120 +1,382 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HBD · Daily check-in</title>
-<style>
-:root{--navy:#1f3864;--red:#b42318;--ink:#16181d;--mut:#5b6472;--line:#e4e7ec}
-*{box-sizing:border-box}
-body{margin:0;background:#eef0f2;font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;display:flex;justify-content:center}
-.phone{width:100%;max-width:420px;background:#fafbfc;min-height:100vh}
-.head{background:var(--navy);color:#fff;padding:20px 22px 16px}
-.head .row{display:flex;align-items:center;gap:10px}
-.logo{width:26px;height:26px;background:rgba(255,255,255,.15);border-radius:6px;display:flex;align-items:center;justify-content:center;font:700 11px ui-monospace,Menlo,monospace}
-.head h1{font-size:15px;font-weight:600;margin:0}
-.head .sub{font-size:11.5px;opacity:.8;margin-top:6px}
-.body{padding:18px 20px 24px;display:flex;flex-direction:column;gap:14px}
-.card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px 16px}
-.card h2{font-size:12px;font-weight:600;margin:0;color:var(--ink)}
-.card h2 span{color:#98a2b3;font-weight:400}
-select,input[type=number],input[type=text],input[type=email]{width:100%;margin-top:8px;border:1px solid #d7dbe1;border-radius:8px;padding:11px 12px;font-size:13px;color:var(--ink);background:#fff}
-.seg{display:flex;gap:6px;margin-top:8px}
-.seg div{flex:1;text-align:center;padding:10px 0;border-radius:8px;border:1px solid #d7dbe1;color:#475467;font-size:12.5px;cursor:pointer;user-select:none}
-.seg div.on{background:var(--navy);border-color:var(--navy);color:#fff;font-weight:600}
-.seg div.on.red{background:var(--red);border-color:var(--red)}
-.rpe{display:grid;grid-template-columns:repeat(11,1fr);gap:4px;margin-top:10px}
-.rpe div{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border:1px solid #d7dbe1;border-radius:6px;font:12px ui-monospace,Menlo,monospace;color:#475467;cursor:pointer}
-.rpe div.on{background:var(--navy);border-color:var(--navy);color:#fff;font-weight:600}
-.lbl{display:flex;justify-content:space-between;font-size:10.5px;color:#98a2b3;margin-top:6px}
-.srow{display:grid;grid-template-columns:72px 1fr 20px;gap:10px;align-items:center;margin-top:12px}
-.srow span:first-child{font-size:12px;color:#475467;text-transform:capitalize}
-.srow input[type=range]{width:100%;margin:0;accent-color:var(--navy)}
-.srow .val{font:12px ui-monospace,Menlo,monospace;color:var(--ink);text-align:right}
-.submit{background:var(--navy);color:#fff;text-align:center;border:none;border-radius:10px;padding:14px 0;font-size:14px;font-weight:600;width:100%;cursor:pointer}
-.msg{text-align:center;font-size:12.5px;padding:10px;border-radius:8px;display:none}
-.msg.ok{display:block;background:#f0f6f1;color:#1a7f37;border:1px solid #c6e0cb}
-.msg.err{display:block;background:#fef3f2;color:#b42318;border:1px solid #f4c7c3}
-.hide{display:none}
-.note{font-size:11px;color:#98a2b3;margin-top:8px}
-a.back{color:#fff;opacity:.7;font-size:11px;text-decoration:none;margin-left:auto}
-</style>
-</head>
-<body>
-<div class="phone">
-  <div class="head">
-    <div class="row"><div class="logo">HB</div><h1>Daily check-in</h1><a class="back" href="/">dashboard →</a></div>
-    <div class="sub" id="today"></div>
-  </div>
-  <div class="body">
-    <div class="card">
-      <h2>Who are you?</h2>
-      <select id="athlete"></select>
-    </div>
-    <div class="card">
-      <h2>Session</h2>
-      <div class="seg" id="moment">
-        <div class="on" data-v="Morning">Morning</div>
-        <div data-v="Afternoon">Afternoon</div>
-        <div data-v="Evening">Evening</div>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HBOD · Daily check-in</title>
+    <style>
+      :root {
+        --navy: #1f3864;
+        --red: #b42318;
+        --ink: #16181d;
+        --mut: #5b6472;
+        --line: #e4e7ec;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #eef0f2;
+        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+        display: flex;
+        justify-content: center;
+      }
+      .phone {
+        width: 100%;
+        max-width: 420px;
+        background: #fafbfc;
+        min-height: 100vh;
+      }
+      .head {
+        background: var(--navy);
+        color: #fff;
+        padding: 20px 22px 16px;
+      }
+      .head .row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .logo {
+        width: 26px;
+        height: 26px;
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font:
+          700 11px ui-monospace,
+          Menlo,
+          monospace;
+      }
+      .head h1 {
+        font-size: 15px;
+        font-weight: 600;
+        margin: 0;
+      }
+      .head .sub {
+        font-size: 11.5px;
+        opacity: 0.8;
+        margin-top: 6px;
+      }
+      .body {
+        padding: 18px 20px 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .card {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 14px 16px;
+      }
+      .card h2 {
+        font-size: 12px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--ink);
+      }
+      .card h2 span {
+        color: #98a2b3;
+        font-weight: 400;
+      }
+      select,
+      input[type="number"],
+      input[type="text"],
+      input[type="email"] {
+        width: 100%;
+        margin-top: 8px;
+        border: 1px solid #d7dbe1;
+        border-radius: 8px;
+        padding: 11px 12px;
+        font-size: 13px;
+        color: var(--ink);
+        background: #fff;
+      }
+      .seg {
+        display: flex;
+        gap: 6px;
+        margin-top: 8px;
+      }
+      .seg div {
+        flex: 1;
+        text-align: center;
+        padding: 10px 0;
+        border-radius: 8px;
+        border: 1px solid #d7dbe1;
+        color: #475467;
+        font-size: 12.5px;
+        cursor: pointer;
+        user-select: none;
+      }
+      .seg div.on {
+        background: var(--navy);
+        border-color: var(--navy);
+        color: #fff;
+        font-weight: 600;
+      }
+      .seg div.on.red {
+        background: var(--red);
+        border-color: var(--red);
+      }
+      .rpe {
+        display: grid;
+        grid-template-columns: repeat(11, 1fr);
+        gap: 4px;
+        margin-top: 10px;
+      }
+      .rpe div {
+        aspect-ratio: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid #d7dbe1;
+        border-radius: 6px;
+        font:
+          12px ui-monospace,
+          Menlo,
+          monospace;
+        color: #475467;
+        cursor: pointer;
+      }
+      .rpe div.on {
+        background: var(--navy);
+        border-color: var(--navy);
+        color: #fff;
+        font-weight: 600;
+      }
+      .lbl {
+        display: flex;
+        justify-content: space-between;
+        font-size: 10.5px;
+        color: #98a2b3;
+        margin-top: 6px;
+      }
+      .srow {
+        display: grid;
+        grid-template-columns: 72px 1fr 20px;
+        gap: 10px;
+        align-items: center;
+        margin-top: 12px;
+      }
+      .srow span:first-child {
+        font-size: 12px;
+        color: #475467;
+        text-transform: capitalize;
+      }
+      .srow input[type="range"] {
+        width: 100%;
+        margin: 0;
+        accent-color: var(--navy);
+      }
+      .srow .val {
+        font:
+          12px ui-monospace,
+          Menlo,
+          monospace;
+        color: var(--ink);
+        text-align: right;
+      }
+      .submit {
+        background: var(--navy);
+        color: #fff;
+        text-align: center;
+        border: none;
+        border-radius: 10px;
+        padding: 14px 0;
+        font-size: 14px;
+        font-weight: 600;
+        width: 100%;
+        cursor: pointer;
+      }
+      .msg {
+        text-align: center;
+        font-size: 12.5px;
+        padding: 10px;
+        border-radius: 8px;
+        display: none;
+      }
+      .msg.ok {
+        display: block;
+        background: #f0f6f1;
+        color: #1a7f37;
+        border: 1px solid #c6e0cb;
+      }
+      .msg.err {
+        display: block;
+        background: #fef3f2;
+        color: #b42318;
+        border: 1px solid #f4c7c3;
+      }
+      .hide {
+        display: none;
+      }
+      .note {
+        font-size: 11px;
+        color: #98a2b3;
+        margin-top: 8px;
+      }
+      a.back {
+        color: #fff;
+        opacity: 0.7;
+        font-size: 11px;
+        text-decoration: none;
+        margin-left: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="phone">
+      <div class="head">
+        <div class="row">
+          <div class="logo">HB</div>
+          <h1>Daily check-in</h1>
+          <a class="back" href="/">dashboard →</a>
+        </div>
+        <div class="sub" id="today"></div>
       </div>
-      <input type="number" id="duration" min="1" max="600" value="90" placeholder="Duration (min)">
-      <div class="note">Duration in minutes</div>
-    </div>
-    <div class="card">
-      <h2>How hard was the session? <span>(RPE 0–10)</span></h2>
-      <div class="rpe" id="rpe"></div>
-      <div class="lbl"><span>Rest</span><span>Very hard</span><span>Maximal</span></div>
-    </div>
-    <div class="card">
-      <h2>Wellness <span>(1 = best · 7 = worst)</span></h2>
-      <div id="wellness"></div>
-    </div>
-    <div class="card">
-      <h2>Any pain or specific discomfort today?</h2>
-      <div class="seg" id="pain">
-        <div data-v="yes">Yes</div>
-        <div class="on" data-v="no">No</div>
+      <div class="body">
+        <div class="card">
+          <h2>Who are you?</h2>
+          <select id="athlete"></select>
+        </div>
+        <div class="card">
+          <h2>Session</h2>
+          <div class="seg" id="moment">
+            <div class="on" data-v="Morning">Morning</div>
+            <div data-v="Afternoon">Afternoon</div>
+            <div data-v="Evening">Evening</div>
+          </div>
+          <input
+            type="number"
+            id="duration"
+            min="1"
+            max="600"
+            value="90"
+            placeholder="Duration (min)"
+          />
+          <div class="note">Duration in minutes</div>
+        </div>
+        <div class="card">
+          <h2>How hard was the session? <span>(RPE 0–10)</span></h2>
+          <div class="rpe" id="rpe"></div>
+          <div class="lbl">
+            <span>Rest</span><span>Very hard</span><span>Maximal</span>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Wellness <span>(1 = best · 7 = worst)</span></h2>
+          <div id="wellness"></div>
+        </div>
+        <div class="card">
+          <h2>Any pain or specific discomfort today?</h2>
+          <div class="seg" id="pain">
+            <div data-v="yes">Yes</div>
+            <div class="on" data-v="no">No</div>
+          </div>
+          <input
+            type="text"
+            id="painLoc"
+            class="hide"
+            placeholder="Location (e.g. hamstring)"
+          />
+          <div class="note">
+            On Mondays this form also asks the 4 weekly OSTRC-H questions
+            (participation, volume, performance, symptoms).
+          </div>
+        </div>
+        <div class="msg" id="msg"></div>
+        <button class="submit" onclick="submitForm()">
+          Submit today's check-in
+        </button>
       </div>
-      <input type="text" id="painLoc" class="hide" placeholder="Location (e.g. hamstring)">
-      <div class="note">On Mondays this form also asks the 4 weekly OSTRC-H questions (participation, volume, performance, symptoms).</div>
     </div>
-    <div class="msg" id="msg"></div>
-    <button class="submit" onclick="submitForm()">Submit today's check-in</button>
-  </div>
-</div>
-<script>
-const $=s=>document.querySelector(s);
-$("#today").textContent=new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"})+" · takes ~60 seconds";
-fetch("/api/athletes").then(r=>r.json()).then(a=>{$("#athlete").innerHTML=a.map(x=>`<option>${x}</option>`).join("")});
-$("#rpe").innerHTML=[...Array(11).keys()].map(i=>`<div data-v="${i}">${i}</div>`).join("");
-let rpeVal=null;
-$("#rpe").onclick=e=>{if(!e.target.dataset.v)return;rpeVal=+e.target.dataset.v;
-  document.querySelectorAll("#rpe div").forEach(d=>d.classList.toggle("on",d===e.target))};
-["fatigue","stress","soreness","sleep"].forEach(k=>{
-  $("#wellness").insertAdjacentHTML("beforeend",
-    `<div class="srow"><span>${k}</span><input type="range" min="1" max="7" value="3" id="w-${k}" oninput="document.getElementById('v-${k}').textContent=this.value"><span class="val" id="v-${k}">3</span></div>`)});
-function seg(id,cb){$(id).onclick=e=>{if(!e.target.dataset.v)return;
-  document.querySelectorAll(id+" div").forEach(d=>d.classList.toggle("on",d===e.target));cb&&cb(e.target.dataset.v)}}
-seg("#moment");seg("#pain",v=>{$("#painLoc").classList.toggle("hide",v!=="yes");
-  document.querySelector("#pain div[data-v=yes]").classList.toggle("red",v==="yes")});
-async function submitForm(){
-  const msg=$("#msg");msg.className="msg";
-  if(rpeVal===null){msg.className="msg err";msg.textContent="Pick an RPE value (0–10).";return}
-  const body={
-    athlete:$("#athlete").value,
-    moment:document.querySelector("#moment .on").dataset.v,
-    duration_min:+$("#duration").value,
-    rpe:rpeVal,
-    fatigue:+$("#w-fatigue").value,stress:+$("#w-stress").value,
-    soreness:+$("#w-soreness").value,sleep:+$("#w-sleep").value,
-    pain:document.querySelector("#pain .on").dataset.v==="yes",
-    pain_location:$("#painLoc").value||null};
-  const r=await fetch("/api/checkin",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
-  if(r.ok){const d=await r.json();msg.className="msg ok";
-    msg.textContent=`Saved — ${d.athlete}, session load ${d.session_load} AU. Thank you!`}
-  else{msg.className="msg err";msg.textContent="Error: "+(await r.text())}
-}
-</script>
-</body>
+    <script>
+      const $ = (s) => document.querySelector(s);
+      $("#today").textContent =
+        new Date().toLocaleDateString("en-GB", {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        }) + " · takes ~60 seconds";
+      fetch("/api/athletes")
+        .then((r) => r.json())
+        .then((a) => {
+          $("#athlete").innerHTML = a
+            .map((x) => `<option>${x}</option>`)
+            .join("");
+        });
+      $("#rpe").innerHTML = [...Array(11).keys()]
+        .map((i) => `<div data-v="${i}">${i}</div>`)
+        .join("");
+      let rpeVal = null;
+      $("#rpe").onclick = (e) => {
+        if (!e.target.dataset.v) return;
+        rpeVal = +e.target.dataset.v;
+        document
+          .querySelectorAll("#rpe div")
+          .forEach((d) => d.classList.toggle("on", d === e.target));
+      };
+      ["fatigue", "stress", "soreness", "sleep"].forEach((k) => {
+        $("#wellness").insertAdjacentHTML(
+          "beforeend",
+          `<div class="srow"><span>${k}</span><input type="range" min="1" max="7" value="3" id="w-${k}" oninput="document.getElementById('v-${k}').textContent=this.value"><span class="val" id="v-${k}">3</span></div>`,
+        );
+      });
+      function seg(id, cb) {
+        $(id).onclick = (e) => {
+          if (!e.target.dataset.v) return;
+          document
+            .querySelectorAll(id + " div")
+            .forEach((d) => d.classList.toggle("on", d === e.target));
+          cb && cb(e.target.dataset.v);
+        };
+      }
+      seg("#moment");
+      seg("#pain", (v) => {
+        $("#painLoc").classList.toggle("hide", v !== "yes");
+        document
+          .querySelector("#pain div[data-v=yes]")
+          .classList.toggle("red", v === "yes");
+      });
+      async function submitForm() {
+        const msg = $("#msg");
+        msg.className = "msg";
+        if (rpeVal === null) {
+          msg.className = "msg err";
+          msg.textContent = "Pick an RPE value (0–10).";
+          return;
+        }
+        const body = {
+          athlete: $("#athlete").value,
+          moment: document.querySelector("#moment .on").dataset.v,
+          duration_min: +$("#duration").value,
+          rpe: rpeVal,
+          fatigue: +$("#w-fatigue").value,
+          stress: +$("#w-stress").value,
+          soreness: +$("#w-soreness").value,
+          sleep: +$("#w-sleep").value,
+          pain: document.querySelector("#pain .on").dataset.v === "yes",
+          pain_location: $("#painLoc").value || null,
+        };
+        const r = await fetch("/api/checkin", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (r.ok) {
+          const d = await r.json();
+          msg.className = "msg ok";
+          msg.textContent = `Saved — ${d.athlete}, session load ${d.session_load} AU. Thank you!`;
+        } else {
+          msg.className = "msg err";
+          msg.textContent = "Error: " + (await r.text());
+        }
+      }
+    </script>
+  </body>
 </html>

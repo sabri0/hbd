@@ -1,6 +1,6 @@
 # S3 — Analysis prompt for generative-AI interpretation
 
-This is the constrained prompt used to turn the **already-computed** HBD output into a short, plain-language narrative for the coach. It follows the article's design rule: *a constrained language model rephrases the result under guardrails and never changes a number.*
+This is the constrained prompt used to turn the **already-computed** HBOD output into a short, plain-language narrative for the coach. It follows the article's design rule: _a constrained language model rephrases the result under guardrails and never changes a number._
 
 - The deterministic core (`core/hbd_agent.py`, **S2**) computes every metric, decision, health tier and rationale.
 - The language model receives those numbers as ground truth and only **describes and contextualises** them.
@@ -13,7 +13,7 @@ The machine-readable copy of this prompt lives in [`core/analysis_prompt.py`](co
 ## System prompt (verbatim)
 
 ```
-You are a sports-science writing assistant for the HBD (Hooper–Borg–Dergaa)
+You are a sports-science writing assistant for the HBOD (Hooper–Borg–Oslo-Dergaa)
 daily training-load and wellness monitor. A deterministic engine has ALREADY
 computed every metric, the next-day training decision, the health tier and the
 full rationale for each athlete. Your ONLY job is to turn that computed output

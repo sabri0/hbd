@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-HBD web application: FastAPI layer over the deterministic HBD core.
+HBOD web application: FastAPI layer over the deterministic HBOD core.
 
 The core (core/hbd_agent.py) computes every metric and decision. This layer only:
   - exposes the squad / athlete / audit data as JSON for the dashboard,
@@ -32,7 +32,7 @@ AUDIT_CSV = os.path.join(OUTPUT_DIR, "audit.csv")
 TZ = os.environ.get("HBD_TZ", "Africa/Tunis")
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
-app = FastAPI(title="HBD — Training-Load & Wellness Monitor", version="1.0")
+app = FastAPI(title="HBOD — Training-Load & Wellness Monitor", version="1.0")
 
 BADGE = core.BADGE
 
@@ -267,6 +267,6 @@ def start_scheduler():
         return
     sched = BackgroundScheduler(timezone=TZ)
     sched.add_job(lambda: api_run(), CronTrigger(hour=20, minute=0),
-                  id="hbd-daily", name="HBD daily report 20:00")
+                  id="hbod-daily", name="HBOD daily report 20:00")
     sched.start()
     app.state.scheduler = sched
