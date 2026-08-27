@@ -61,10 +61,10 @@ COLMAP = {
     # Health / injury module (HBOD daily pain gate + weekly OSTRC-H)
     "pain": ["douleur", "gêne", "gene specifique", "pain", "health problem"],
     "pain_location": ["localis", "location", "zone"],
-    "ostrc_q1": ["ostrc_q1", "participation"],
-    "ostrc_q2": ["ostrc_q2", "volume"],
-    "ostrc_q3": ["ostrc_q3", "performance ostrc", "ostrc performance"],
-    "ostrc_q4": ["ostrc_q4", "symptom"],
+    "ostrc_q1": ["ostrc_q1", "ostrc q1", "ostrc-q1", "participation"],
+    "ostrc_q2": ["ostrc_q2", "ostrc q2", "ostrc-q2", "volume"],
+    "ostrc_q3": ["ostrc_q3", "ostrc q3", "ostrc-q3", "performance ostrc", "ostrc performance"],
+    "ostrc_q4": ["ostrc_q4", "ostrc q4", "ostrc-q4", "symptom"],
 }
 
 
@@ -105,6 +105,45 @@ def _to_float(x):
         return float(num)
     except ValueError:
         return None
+
+
+# OSTRC-H response labels -> item score (Clarsen 2014 per-option scoring 0/8/17/25).
+# The Google Form exports the option text; older exports carried the number directly,
+# so both are accepted and a numeric value always wins.
+OSTRC_LABELS = {
+    # Q1 participation
+    "full participation without health problems": 0,
+    "full participation but with health problems": 8,
+    "reduced participation": 17,
+    "reduced participation due to health problems": 17,
+    "could not participate": 25,
+    "cannot participate": 25,
+    # Q2 training volume / Q3 performance
+    "no reduction": 0,
+    "no effect": 0,
+    "to a minor extent": 8,
+    "to a moderate extent": 17,
+    "to a major extent": 25,
+    # Q4 symptoms
+    "no symptoms": 0,
+    "mild": 8,
+    "moderate": 17,
+    "severe": 25,
+}
+
+
+def _ostrc_score(x):
+    """Score one OSTRC-H item. Numeric input passes through; option text maps via
+    OSTRC_LABELS. Unrecognised text returns None rather than a silent zero."""
+    if x is None:
+        return None
+    s = str(x).strip()
+    if s == "":
+        return None
+    v = _to_float(s)
+    if v is not None:
+        return v
+    return OSTRC_LABELS.get(" ".join(s.lower().split()))
 
 
 def _yesno(x):
@@ -193,10 +232,10 @@ def load_records(path):
             "sleep": _to_float(g("sleep")),
             "pain": _yesno(g("pain")),
             "pain_location": (g("pain_location") or "").strip() or None,
-            "ostrc_q1": _to_float(g("ostrc_q1")),
-            "ostrc_q2": _to_float(g("ostrc_q2")),
-            "ostrc_q3": _to_float(g("ostrc_q3")),
-            "ostrc_q4": _to_float(g("ostrc_q4")),
+            "ostrc_q1": _ostrc_score(g("ostrc_q1")),
+            "ostrc_q2": _ostrc_score(g("ostrc_q2")),
+            "ostrc_q3": _ostrc_score(g("ostrc_q3")),
+            "ostrc_q4": _ostrc_score(g("ostrc_q4")),
         }
         if rec["athlete"] and rec["duration"] is not None and rec["intensity"] is not None:
             rec["session_load"] = rec["duration"] * rec["intensity"]

@@ -43,7 +43,7 @@ Every metric is computed **deterministically**. Generative AI, where used, only 
 | **S3** | `S3_analysis_prompt.md`, `core/analysis_prompt.py`                              | The generative-AI analysis prompt used to produce a narrative interpretation of the computed data, plus the module that builds the deterministic data block and (optionally) calls a model to render the coach brief. Constrains the model to describing and contextualising the deterministic outputs — it cannot recompute, override or invent metrics.                                                                                                                                           |
 | **S4** | `S4_HBOD_Monitoring_Form.docx`                                                  | The daily monitoring form template: every field and its response scale (see [§9](#9-data-model-and-input-format)).                                                                                                                                                                                                                                                                                                                                                                                  |
 | **S5** | `validation/`                                                                   | A small synthetic dataset (`S5_validation_dataset.csv`, 5 athletes × 28 days) with its corresponding worked example output (`S5_example_output.txt`, `S5_example_report.html`, `S5_example_audit.csv`), used to validate the pipeline: given inputs → expected indices, decision and rationale. Each athlete targets one decision branch (INCREASE / MAINTAIN / spike-DECREASE / wellness-DECREASE / REDUCE & REFER). See [`validation/README.md`](validation/README.md) for the reproduce command. |
-| **S6** | `data/cohort_football_100.csv`, `data/S6_HBOD_Synthetic_Cohort_100players.xlsx` | A synthetic 100-player football cohort, as a comma-separated file and as an Excel workbook. The workbook holds three sheets — raw data, computed per-player metrics, and variable definitions — plus the supplementary figures: the squad wellness heatmap, the exponentially-weighted vs. rolling workload (ACWR) ratio, and the readiness-score distribution.                                                                                                                                     |
+| **S6** | `data/S6_cohort_football_100.csv`, `data/S6_HBOD_Synthetic_Cohort_100players.xlsx` | A synthetic 100-player football cohort over three months (2026-03-27 to 2026-06-26), as a comma-separated file and as an Excel workbook. The workbook holds three sheets — raw data, computed per-player metrics, and variable definitions — plus the supplementary figures: the squad wellness heatmap, the exponentially-weighted vs. rolling workload (ACWR) ratio, and the readiness-score distribution.                                                                                                                                     |
 
 Companion documents also provided: `HBOD_Manuscript_BiologyOfSport - ID.docx` (the manuscript). Items marked _italic_ are external artifacts referenced by the article; the code, data and deployment assets they describe are all in this repository.
 
@@ -187,7 +187,7 @@ French Google-Form exports work unchanged (`Horodateur, Nom d'utilisateur, Qui e
 
 To use your own data, replace the CSV (or point `HBD_DATA` at it) — no code change is needed as long as headers contain the recognisable keywords.
 
-**Synthetic cohort (S6).** `data/cohort_football_100.csv` and `data/S6_HBOD_Synthetic_Cohort_100players.xlsx` provide 100 synthetic football players over several weeks (~2,500 daily entries). The workbook adds computed per-player metrics, variable definitions, and the supplementary figures (squad wellness heatmap; EWMA vs. rolling ACWR; readiness-score distribution). This is the dataset used to validate the pipeline and generate the example report.
+**Synthetic cohort (S6).** `data/S6_cohort_football_100.csv` and `data/S6_HBOD_Synthetic_Cohort_100players.xlsx` provide 100 synthetic football players over three months, 2026-03-27 to 2026-06-26 (8,993 daily entries across 79 training days). The workbook adds computed per-player metrics, variable definitions, and the supplementary figures (squad wellness heatmap; EWMA vs. rolling ACWR; readiness-score distribution). This is the dataset used to validate the pipeline and generate the example report.
 
 ---
 
@@ -204,7 +204,7 @@ HBDApp/
 │       ├── index.html       # Coach dashboard (Squad / Athletes / Reports / Audit log)
 │       └── checkin.html     # Athlete mobile daily check-in form
 ├── data/
-│   ├── cohort_football_100.csv                 # Synthetic 100-player football cohort — S6
+│   ├── S6_cohort_football_100.csv              # Synthetic 100-player football cohort, 3 months — S6
 │   └── S6_HBOD_Synthetic_Cohort_100players.xlsx # Same cohort as workbook (raw · metrics · definitions)
 ├── validation/              # S5: synthetic validation dataset + worked example output
 │   ├── S5_validation_dataset.csv               # 5 athletes × 28 days
