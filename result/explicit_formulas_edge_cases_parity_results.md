@@ -127,6 +127,7 @@ Override tiers:
 
 - STOP: cannot participate => force DECREASE + urgent medical wording
 - REFER: substantial problem => force DECREASE + reduce-and-refer wording
+  (an escalated REFER is counted as DECREASE in squad decision tallies)
 - HOLD: any health flag/pain => never allow INCREASE; INCREASE downgrades to MAINTAIN
 
 ## 2. Edge-case handling implemented in code
