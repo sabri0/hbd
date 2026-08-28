@@ -27,15 +27,36 @@ Squad result: **INCREASE 1 · MAINTAIN 0 · DECREASE 4**, one health referral.
 
 ## Reproduce
 
-From the repository root:
+From the repository root. Write the regenerated run to `output/` and leave the
+shipped reference files untouched, so the check compares against a clean copy:
 
 ```bash
+mkdir -p output
+rm -f output/S5_regen_audit.csv
 python core/hbd_agent.py --input validation/S5_validation_dataset.csv \
-    --date 2026-03-31 --out validation/S5_example_report.html \
-    --log validation/S5_example_audit.csv --mode daily
+    --date 2026-03-31 --out output/S5_regen_report.html \
+    --log output/S5_regen_audit.csv --mode daily
 ```
 
-Every index and decision is deterministic, so re-running yields the same numbers
-(only the audit log's `generated_at` wall-clock stamp differs). The dataset was
-produced by a fixed generator with no randomness — see the header of this folder
-in the manuscript's Supplementary Materials for the construction rules above.
+`--log` **appends** to its target rather than overwriting it. Always point it at
+a fresh path (or delete the file first, as above); re-running with `--log
+validation/S5_example_audit.csv` would duplicate rows into the reference file
+and a positional comparison against a stale log can appear to pass when it has
+not been rerun at all.
+
+Then compare against the reference, ignoring the first column
+(`generated_at`, a wall-clock stamp that differs by design):
+
+```bash
+diff <(cut -d, -f2- validation/S5_example_audit.csv) \
+     <(cut -d, -f2- output/S5_regen_audit.csv)
+```
+
+Expected: no output. The regenerated audit holds 5 rows — one per athlete —
+matching the reference on all 12 non-timestamp fields, with squad decisions
+**INCREASE 1 · MAINTAIN 0 · DECREASE 4**.
+
+Every index and decision is deterministic, so re-running yields the same numbers.
+The dataset was produced by a fixed generator with no randomness — see the header
+of this folder in the manuscript's Supplementary Materials for the construction
+rules above.
