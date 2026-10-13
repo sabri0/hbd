@@ -1,3 +1,9 @@
+> **This repository is archived.** It holds the rule-based prototype, an unpublished development stage of HBOD.
+> HBOD as described in the paper is the adaptive state-space agent that reports a probability; in it the
+> acute-to-chronic workload ratio is shown for planning only and triggers no decision. The current code is at
+> **https://github.com/sabri0/HBOD**, where this prototype is also kept as the archived earlier release
+> `v0.1.0-rule-based-prototype`.
+
 # HBOD — Training-Load & Wellness Monitor
 
 **Supplementary Materials** for the manuscript _HBOD (Hooper-Borg-Oslo-Dergaa): an autonomous artificial intelligence agent and free application for monitoring athletes' daily training-load, wellness, and health_
